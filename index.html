@@ -128,9 +128,11 @@
         const userId = urlParams.get('user_id') || '';
 
         // Манифест для TON Connect
-        const manifestUrl = window.location.origin + '/tonconnect-manifest.json';
+        // Автоматически определяется на основе текущего URL
+        const manifestUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/') + 'tonconnect-manifest.json';
 
         // Инициализация TON Connect UI
+        // Ограничиваем список кошельков только: Telegram Wallet, Tonkeeper, MyTonWallet
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: manifestUrl,
             buttonRootId: 'tonconnect-button',
@@ -140,6 +142,25 @@
             },
             actionsConfiguration: {
                 twaReturnUrl: `https://t.me/${botUsername}`
+            },
+            walletsListConfiguration: {
+                includeWallets: [
+                    {
+                        name: 'wallet',
+                        bridgeUrl: 'https://bridge.tonapi.io/bridge',
+                        universalLink: 'https://t.me/wallet'
+                    },
+                    {
+                        name: 'tonkeeper',
+                        bridgeUrl: 'https://bridge.tonapi.io/bridge',
+                        universalLink: 'https://app.tonkeeper.com/ton-connect'
+                    },
+                    {
+                        name: 'mytonwallet',
+                        bridgeUrl: 'https://bridge.tonapi.io/bridge',
+                        universalLink: 'https://connect.mytonwallet.org'
+                    }
+                ]
             }
         });
 
