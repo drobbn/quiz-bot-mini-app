@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Авторизация через Tonkeeper</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@2.3.0/dist/tonconnect-ui.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -84,20 +84,6 @@
             word-break: break-all;
             color: var(--tg-theme-link-color, #2481cc);
         }
-
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(0,0,0,.1);
-            border-radius: 50%;
-            border-top-color: var(--tg-theme-button-color, #2481cc);
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
     </style>
 </head>
 <body>
@@ -117,182 +103,91 @@
     </div>
 
     <script>
-        // Обработка ошибок и логирование
-        window.addEventListener('error', function(e) {
-            console.error('Ошибка JavaScript:', e.error);
-            const statusDiv = document.getElementById('status');
-            if (statusDiv) {
-                statusDiv.className = 'status error';
-                statusDiv.textContent = '❌ Ошибка: ' + (e.message || 'Неизвестная ошибка');
-                statusDiv.style.display = 'block';
+        // Инициализация Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Получаем параметры из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const botUsername = urlParams.get('bot') || '';
+        const userId = urlParams.get('user_id') || '';
+
+        // Манифест для TON Connect
+        const manifestUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/') + 'tonconnect-manifest.json';
+
+        // Инициализация TON Connect UI
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: manifestUrl,
+            buttonRootId: 'tonconnect-button',
+            language: 'ru',
+            uiPreferences: {
+                theme: tg.colorScheme === 'dark' ? 'DARK' : 'LIGHT'
+            },
+            actionsConfiguration: {
+                twaReturnUrl: `https://t.me/${botUsername}`
             }
         });
 
-        try {
-            console.log('🚀 Начало инициализации Mini App...');
-            
-            // Инициализация Telegram Web App
-            const tg = window.Telegram.WebApp;
-            if (!tg) {
-                throw new Error('Telegram WebApp не загружен');
-            }
-            console.log('✅ Telegram WebApp загружен');
-            
-            tg.ready();
-            tg.expand();
-
-            // Получаем параметры из URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const botUsername = urlParams.get('bot') || '';
-            const userId = urlParams.get('user_id') || '';
-            console.log('📋 Параметры:', { botUsername, userId });
-
-            // Манифест для TON Connect
-            // Автоматически определяется на основе текущего URL
-            const manifestUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/') + 'tonconnect-manifest.json';
-            console.log('📄 Manifest URL:', manifestUrl);
-
-            // Проверка наличия TON_CONNECT_UI
-            if (typeof TON_CONNECT_UI === 'undefined') {
-                throw new Error('TON Connect UI библиотека не загружена');
-            }
-            console.log('✅ TON Connect UI библиотека загружена');
-
-            // Инициализация TON Connect UI
-            console.log('🔧 Инициализация TON Connect UI...');
-            const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                manifestUrl: manifestUrl,
-                buttonRootId: 'tonconnect-button',
-                language: 'ru',
-                uiPreferences: {
-                    theme: tg.colorScheme === 'dark' ? 'DARK' : 'LIGHT'
-                },
-                actionsConfiguration: {
-                    twaReturnUrl: `https://t.me/${botUsername}`
-                },
-                walletsListConfiguration: {
-                    includeWallets: ['wallet', 'tonkeeper', 'mytonwallet']
-                }
-            });
-            console.log('✅ TON Connect UI инициализирован');
-            
-            // Попытка установить фильтр кошельков после инициализации
-            console.log('🔍 Проверка доступных методов tonConnectUI...');
-            console.log('Доступные методы:', Object.keys(tonConnectUI));
-            console.log('Тип tonConnectUI:', typeof tonConnectUI);
-            
-            try {
-                // Вариант 1: через setWalletsListConfiguration (если метод существует)
-                if (typeof tonConnectUI.setWalletsListConfiguration === 'function') {
-                    console.log('🔧 Установка фильтра кошельков через setWalletsListConfiguration...');
-                    tonConnectUI.setWalletsListConfiguration({
-                        includeWallets: [
-                            { appName: 'wallet' },
-                            { appName: 'tonkeeper' },
-                            { appName: 'mytonwallet' }
-                        ]
-                    });
-                    console.log('✅ Фильтр кошельков установлен через setWalletsListConfiguration');
-                }
-                // Вариант 2: через setOptions (если метод существует)
-                else if (typeof tonConnectUI.setOptions === 'function') {
-                    console.log('🔧 Установка фильтра кошельков через setOptions...');
-                    tonConnectUI.setOptions({
-                        walletsListConfiguration: {
-                            includeWallets: [
-                                { appName: 'wallet' },
-                                { appName: 'tonkeeper' },
-                                { appName: 'mytonwallet' }
-                            ]
-                        }
-                    });
-                    console.log('✅ Фильтр кошельков установлен через setOptions');
-                } 
-                // Вариант 3: через UI (если есть доступ к UI объекту)
-                else if (tonConnectUI.ui && typeof tonConnectUI.ui.setWalletsListConfiguration === 'function') {
-                    console.log('🔧 Установка фильтра кошельков через ui.setWalletsListConfiguration...');
-                    tonConnectUI.ui.setWalletsListConfiguration({
-                        includeWallets: [
-                            { appName: 'wallet' },
-                            { appName: 'tonkeeper' },
-                            { appName: 'mytonwallet' }
-                        ]
-                    });
-                    console.log('✅ Фильтр кошельков установлен через ui.setWalletsListConfiguration');
-                }
-                else {
-                    console.log('⚠️ Методы для установки фильтра кошельков не найдены');
-                    console.log('Проверяем структуру tonConnectUI:', tonConnectUI);
-                    console.log('Проверяем tonConnectUI.ui:', tonConnectUI.ui);
-                }
-            } catch (e) {
-                console.warn('⚠️ Не удалось установить фильтр кошельков:', e);
-                console.error('Ошибка:', e.stack);
-            }
-
-            // Обработка изменения статуса кошелька
-            tonConnectUI.onStatusChange((wallet) => {
-                const statusDiv = document.getElementById('status');
-                const walletInfoDiv = document.getElementById('wallet-info');
-                const walletAddressDiv = document.getElementById('wallet-address');
-
-                if (wallet) {
-                    // Кошелек подключен
-                    statusDiv.className = 'status success';
-                    statusDiv.textContent = '✅ Кошелек успешно подключен!';
-                    statusDiv.style.display = 'block';
-
-                    walletInfoDiv.style.display = 'block';
-                    walletAddressDiv.textContent = wallet.account.address;
-
-                    // Отправляем данные в бота через Telegram Web App
-                    try {
-                        tg.sendData(JSON.stringify({
-                            type: 'wallet_connected',
-                            address: wallet.account.address,
-                            chain: wallet.account.chain,
-                            publicKey: wallet.account.publicKey,
-                            userId: userId
-                        }));
-
-                        // Закрываем Mini App через 2 секунды
-                        setTimeout(() => {
-                            tg.close();
-                        }, 2000);
-                    } catch (error) {
-                        console.error('Ошибка отправки данных:', error);
-                        statusDiv.className = 'status error';
-                        statusDiv.textContent = '❌ Ошибка отправки данных. Попробуйте снова.';
-                    }
-                } else {
-                    // Кошелек отключен
-                    statusDiv.className = 'status';
-                    statusDiv.textContent = '';
-                    statusDiv.style.display = 'none';
-                    walletInfoDiv.style.display = 'none';
-                }
-            });
-
-            // Обработка ошибок
-            tonConnectUI.onStatusChange(null, (error) => {
-                console.error('❌ Ошибка подключения:', error);
-                const statusDiv = document.getElementById('status');
-                statusDiv.className = 'status error';
-                statusDiv.textContent = '❌ Ошибка подключения: ' + (error?.message || 'Неизвестная ошибка');
-                statusDiv.style.display = 'block';
-            });
-            
-            console.log('✅ Все обработчики установлены');
-        } catch (error) {
-            console.error('❌ Критическая ошибка при инициализации:', error);
+        // Обработка изменения статуса кошелька
+        tonConnectUI.onStatusChange((wallet) => {
             const statusDiv = document.getElementById('status');
-            if (statusDiv) {
-                statusDiv.className = 'status error';
-                statusDiv.textContent = '❌ Ошибка инициализации: ' + (error.message || 'Неизвестная ошибка');
+            const walletInfoDiv = document.getElementById('wallet-info');
+            const walletAddressDiv = document.getElementById('wallet-address');
+
+            if (wallet) {
+                // Кошелек подключен
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ Кошелек успешно подключен!';
                 statusDiv.style.display = 'block';
+
+                walletInfoDiv.style.display = 'block';
+                walletAddressDiv.textContent = wallet.account.address;
+
+                // Определяем название кошелька
+                let walletName = 'unknown';
+                if (wallet.device && wallet.device.appName) {
+                    walletName = wallet.device.appName;
+                } else if (wallet.provider) {
+                    walletName = wallet.provider;
+                }
+
+                // Отправляем данные в бота через Telegram Web App
+                try {
+                    tg.sendData(JSON.stringify({
+                        type: 'wallet_connected',
+                        address: wallet.account.address,
+                        chain: wallet.account.chain,
+                        publicKey: wallet.account.publicKey,
+                        userId: userId,
+                        walletName: walletName
+                    }));
+
+                    // Закрываем Mini App через 2 секунды
+                    setTimeout(() => {
+                        tg.close();
+                    }, 2000);
+                } catch (error) {
+                    console.error('Ошибка отправки данных:', error);
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = '❌ Ошибка отправки данных. Попробуйте снова.';
+                }
+            } else {
+                // Кошелек отключен
+                statusDiv.className = 'status';
+                statusDiv.textContent = '';
+                statusDiv.style.display = 'none';
+                walletInfoDiv.style.display = 'none';
             }
-        }
+        });
+
+        // Обработка ошибок
+        tonConnectUI.onStatusChange(null, (error) => {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status error';
+            statusDiv.textContent = '❌ Ошибка подключения: ' + (error?.message || 'Неизвестная ошибка');
+            statusDiv.style.display = 'block';
+        });
     </script>
 </body>
 </html>
-
