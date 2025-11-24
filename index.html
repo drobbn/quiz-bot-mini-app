@@ -169,9 +169,51 @@
                 },
                 actionsConfiguration: {
                     twaReturnUrl: `https://t.me/${botUsername}`
+                },
+                walletsListConfiguration: {
+                    includeWallets: [
+                        { appName: 'wallet' },      // Telegram Wallet
+                        { appName: 'tonkeeper' },   // Tonkeeper
+                        { appName: 'mytonwallet' }  // MyTonWallet
+                    ]
                 }
             });
             console.log('✅ TON Connect UI инициализирован');
+            
+            // Попытка установить фильтр кошельков после инициализации
+            try {
+                // Вариант 1: через setWalletsListConfiguration (если метод существует)
+                if (typeof tonConnectUI.setWalletsListConfiguration === 'function') {
+                    console.log('🔧 Установка фильтра кошельков через setWalletsListConfiguration...');
+                    tonConnectUI.setWalletsListConfiguration({
+                        includeWallets: [
+                            { appName: 'wallet' },
+                            { appName: 'tonkeeper' },
+                            { appName: 'mytonwallet' }
+                        ]
+                    });
+                    console.log('✅ Фильтр кошельков установлен через setWalletsListConfiguration');
+                }
+                // Вариант 2: через setOptions (если метод существует)
+                else if (typeof tonConnectUI.setOptions === 'function') {
+                    console.log('🔧 Установка фильтра кошельков через setOptions...');
+                    tonConnectUI.setOptions({
+                        walletsListConfiguration: {
+                            includeWallets: [
+                                { appName: 'wallet' },
+                                { appName: 'tonkeeper' },
+                                { appName: 'mytonwallet' }
+                            ]
+                        }
+                    });
+                    console.log('✅ Фильтр кошельков установлен через setOptions');
+                } else {
+                    console.log('⚠️ Методы для установки фильтра кошельков не найдены');
+                    console.log('Доступные методы tonConnectUI:', Object.keys(tonConnectUI));
+                }
+            } catch (e) {
+                console.warn('⚠️ Не удалось установить фильтр кошельков:', e);
+            }
 
             // Обработка изменения статуса кошелька
             tonConnectUI.onStatusChange((wallet) => {
