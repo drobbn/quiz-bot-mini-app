@@ -211,19 +211,34 @@
         
         // Глобальная функция для открытия deep link
         window.openDeepLink = function() {
+            console.log('='.repeat(60));
+            console.log('🔗 ВЫЗОВ openDeepLink');
+            console.log('='.repeat(60));
+            console.log('   globalDeepLink:', globalDeepLink);
+            console.log('   globalDeepLink существует:', globalDeepLink !== null);
+            
+            // Пробуем получить из localStorage, если глобальная переменная пуста
             if (!globalDeepLink) {
-                console.error('❌ Deep link не создан!');
-                return;
+                console.log('   ⚠️ globalDeepLink пуст, пробуем получить из localStorage...');
+                const storedLink = localStorage.getItem('wallet_deep_link');
+                if (storedLink) {
+                    globalDeepLink = storedLink;
+                    console.log('   ✅ Deep link восстановлен из localStorage');
+                } else {
+                    console.error('❌ Deep link не найден ни в глобальной переменной, ни в localStorage!');
+                    const statusDiv = document.getElementById('status');
+                    statusDiv.className = 'status error';
+                    statusDiv.innerHTML = '❌ <b>Ошибка:</b> Deep link не найден.<br><br>Попробуйте переподключить кошелек или отправьте адрес в бота командой:<br><code>/connect_wallet &lt;адрес&gt;</code>';
+                    return;
+                }
             }
             
-            console.log('='.repeat(60));
-            console.log('🔗 ОТКРЫТИЕ DEEP LINK (из глобальной функции)');
-            console.log('='.repeat(60));
             console.log('   Deep Link:', globalDeepLink);
             console.log('   Длина deep link:', globalDeepLink.length);
             console.log('   tg.openTelegramLink доступен:', typeof tg.openTelegramLink === 'function');
             console.log('   tg.openLink доступен:', typeof tg.openLink === 'function');
             console.log('   tg.close доступен:', typeof tg.close === 'function');
+            console.log('   window.location доступен:', typeof window.location !== 'undefined');
             
             const statusDiv = document.getElementById('status');
             
@@ -231,12 +246,13 @@
                 // Пробуем разные способы открытия
                 if (tg.openTelegramLink) {
                     console.log('   ✅ Используем tg.openTelegramLink');
+                    console.log('   Вызов: tg.openTelegramLink("' + globalDeepLink.substring(0, 80) + '...")');
                     tg.openTelegramLink(globalDeepLink);
-                    console.log('   ✅ tg.openTelegramLink вызван');
+                    console.log('   ✅ tg.openTelegramLink вызван успешно');
                 } else if (tg.openLink) {
                     console.log('   ✅ Используем tg.openLink');
                     tg.openLink(globalDeepLink);
-                    console.log('   ✅ tg.openLink вызван');
+                    console.log('   ✅ tg.openLink вызван успешно');
                 } else {
                     console.log('   ⚠️ Используем window.location (fallback)');
                     window.location.href = globalDeepLink;
@@ -247,8 +263,22 @@
                 statusDiv.className = 'status success';
                 statusDiv.innerHTML = '✅ <b>Авторизация завершается...</b><br><br>Переход к боту...<br><br><small>Если ничего не произошло, проверьте логи бота</small>';
                 
+                // Сохраняем попытку открытия
+                try {
+                    localStorage.setItem('last_deep_link_attempt', JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        deepLink: globalDeepLink,
+                        method: tg.openTelegramLink ? 'openTelegramLink' : (tg.openLink ? 'openLink' : 'window.location')
+                    }));
+                } catch (e) {
+                    console.warn('⚠️ Не удалось сохранить попытку:', e);
+                }
+                
             } catch (error) {
                 console.error('❌ Ошибка открытия deep link:', error);
+                console.error('   Тип ошибки:', error.constructor.name);
+                console.error('   Сообщение:', error.message);
+                console.error('   Стек:', error.stack);
                 statusDiv.className = 'status error';
                 statusDiv.innerHTML = '❌ <b>Ошибка открытия deep link</b><br><br>Попробуйте нажать кнопку еще раз.<br><br><small>Ошибка: ' + error.message + '</small>';
             }
