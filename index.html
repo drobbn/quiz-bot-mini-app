@@ -242,10 +242,34 @@
                     console.log('   Длина данных:', jsonString.length);
                     console.log('   tg.platform:', tg.platform);
                     console.log('   tg.initData:', tg.initData ? 'есть' : 'нет');
+                    console.log('   tg.version:', tg.version);
+                    console.log('   tg.isExpanded:', tg.isExpanded);
+                    console.log('   tg.isClosingConfirmationEnabled:', tg.isClosingConfirmationEnabled);
+                    
+                    // ВАЖНО: Проверяем, что мы действительно в Telegram
+                    if (!tg.initData && !tg.initDataUnsafe) {
+                        console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Mini App открыт не в Telegram!');
+                        console.error('❌ tg.sendData() не будет работать в браузере!');
+                        throw new Error('Mini App должен быть открыт через Telegram бота!');
+                    }
+                    
+                    // Показываем главную кнопку перед отправкой (может помочь)
+                    if (tg.MainButton) {
+                        tg.MainButton.setText('Отправка данных...');
+                        tg.MainButton.show();
+                    }
                     
                     // Отправляем данные
                     tg.sendData(jsonString);
                     console.log('✅ tg.sendData вызван успешно');
+                    
+                    // Ждем немного перед закрытием
+                    if (tg.MainButton) {
+                        tg.MainButton.setText('Данные отправлены!');
+                        setTimeout(() => {
+                            tg.MainButton.hide();
+                        }, 1000);
+                    }
                     
                     // Проверяем, что данные действительно отправлены
                     console.log('🔍 Проверка после отправки:');
