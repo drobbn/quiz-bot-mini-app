@@ -326,13 +326,24 @@
             
             try {
                 // Пробуем разные способы открытия
+                // ВАЖНО: Используем tg.openTelegramLink - это правильный способ для deep links в Telegram
                 if (tg.openTelegramLink) {
                     debugLog('✅ Используем tg.openTelegramLink', 'success');
                     console.log('   ✅ Используем tg.openTelegramLink');
                     console.log('   Вызов: tg.openTelegramLink("' + globalDeepLink.substring(0, 80) + '...")');
+                    console.log('   Полный deep link:', globalDeepLink);
+                    
+                    // ВАЖНО: tg.openTelegramLink должен открыть бота с командой /start
                     tg.openTelegramLink(globalDeepLink);
+                    
                     debugLog('✅ tg.openTelegramLink вызван успешно', 'success');
                     console.log('   ✅ tg.openTelegramLink вызван успешно');
+                    
+                    // Дополнительная проверка через небольшую задержку
+                    setTimeout(() => {
+                        debugLog('⏳ Проверка: deep link должен был открыть бота', 'info');
+                        debugLog('   Если бот не открылся, попробуйте нажать кнопку вручную', 'warning');
+                    }, 2000);
                 } else if (tg.openLink) {
                     debugLog('✅ Используем tg.openLink', 'success');
                     console.log('   ✅ Используем tg.openLink');
@@ -486,11 +497,7 @@
                         throw new Error('Mini App должен быть открыт через Telegram бота!');
                     }
                     
-                    // Показываем главную кнопку перед отправкой (может помочь)
-                    if (tg.MainButton) {
-                        tg.MainButton.setText('Отправка данных...');
-                        tg.MainButton.show();
-                    }
+                    // Кнопки убраны - используем автоматическое открытие deep link
                     
                     // Пробуем отправить данные через tg.sendData
                     let sendSuccess = false;
@@ -513,20 +520,19 @@
                             debugLog('✅ tg.sendData вызван успешно', 'success');
                             console.log('✅ tg.sendData вызван успешно');
                             console.log('   Длина данных:', jsonString.length, 'символов');
-                            sendSuccess = true;
+                            
+                            // ВАЖНО: tg.sendData() может не работать в некоторых случаях
+                            // Поэтому всегда используем deep link как резервный вариант
+                            // НЕ помечаем как успех, чтобы всегда показывать кнопку
+                            sendSuccess = false;  // Всегда используем deep link как основной способ
                             
                             // Сохраняем статус отправки
-                            localStorage.setItem('last_send_status', 'success');
+                            localStorage.setItem('last_send_status', 'called');
                             localStorage.setItem('last_send_timestamp', new Date().toISOString());
                             localStorage.setItem('last_send_data', jsonString);
                             
-                            // Показываем успешное сообщение
-                            statusDiv.className = 'status success';
-                            statusDiv.innerHTML = '✅ <b>Данные отправлены в бота!</b><br><br>Проверьте бота для подтверждения авторизации.<br><br><small>Если авторизация не прошла, нажмите кнопку ниже для альтернативного способа.</small>';
-                            statusDiv.style.display = 'block';
-                            
-                            // ВАЖНО: Не закрываем Mini App сразу - даем время на обработку
-                            debugLog('⏳ Ожидание обработки данных ботом...', 'info');
+                            debugLog('⚠️ tg.sendData вызван, но используем deep link как основной способ', 'warning');
+                            debugLog('   Это гарантирует доставку данных в бот', 'info');
                         }
                     } catch (sendError) {
                         debugLog(`❌ Ошибка tg.sendData: ${sendError.message}`, 'error');
@@ -636,67 +642,30 @@
                         localStorage.setItem('wallet_data', jsonString);
                         localStorage.setItem('bot_username', botUsername);
                         
-                        // Если tg.sendData не сработал, автоматически открываем deep link через небольшую задержку
-                        if (!sendSuccess) {
-                            console.log('⚠️ tg.sendData не сработал, используем deep link через 2 секунды...');
-                            statusDiv.className = 'status success';
-                            statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Автоматически завершаю авторизацию через 2 секунды...<br><br><small>Если ничего не произошло, нажмите кнопку ниже</small>';
-                            statusDiv.style.display = 'block';
-                            
-                            setTimeout(() => {
-                                console.log('🔗 Автоматическое открытие deep link...');
-                                if (window.openDeepLink) {
-                                    window.openDeepLink();
-                                } else {
-                                    console.error('❌ Функция openDeepLink не найдена!');
-                                }
-                            }, 2000);
-                        } else {
-                            // Если tg.sendData сработал, все равно показываем кнопку на случай, если данные не дошли
-                            console.log('✅ tg.sendData вызван, но показываем кнопку на всякий случай');
-                        }
+                        // ВАЖНО: Всегда используем deep link как основной способ доставки данных
+                        // tg.sendData() может не работать в некоторых версиях Telegram
+                        // Открываем deep link автоматически сразу после создания
+                        debugLog('🔗 Автоматическое открытие deep link...', 'info');
+                        statusDiv.className = 'status success';
+                        statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Завершаю авторизацию...<br><br><small>Переход к боту...</small>';
+                        statusDiv.style.display = 'block';
                         
-                        // Показываем кнопку для открытия deep link (на случай, если автоматическое открытие не сработало)
-                        if (tg.MainButton) {
-                            tg.MainButton.setText('✅ Завершить авторизацию');
-                            tg.MainButton.onClick(() => {
-                                debugLog('🔘 Кнопка "Завершить авторизацию" нажата', 'info');
-                                console.log('🔘 Кнопка "Завершить авторизацию" нажата');
-                                if (window.openDeepLink) {
-                                    debugLog('✅ Функция openDeepLink найдена, вызываем...', 'success');
-                                    window.openDeepLink();
-                                } else {
-                                    debugLog('❌ Функция openDeepLink не найдена!', 'error');
-                                    console.error('❌ Функция openDeepLink не найдена!');
-                                    statusDiv.className = 'status error';
-                                    statusDiv.innerHTML = '❌ <b>Ошибка:</b> функция не найдена. Попробуйте обновить страницу.';
-                                }
-                            });
-                            tg.MainButton.show();
-                            debugLog('✅ Кнопка показана пользователю', 'success');
-                            console.log('✅ Кнопка показана пользователю и привязана к функции openDeepLink');
-                        } else {
-                            debugLog('⚠️ tg.MainButton недоступен', 'warning');
-                        }
+                        // Открываем deep link сразу (без задержки)
+                        setTimeout(() => {
+                            debugLog('🔗 Открытие deep link...', 'info');
+                            console.log('🔗 Автоматическое открытие deep link...');
+                            if (window.openDeepLink) {
+                                window.openDeepLink();
+                            } else {
+                                debugLog('❌ Функция openDeepLink не найдена!', 'error');
+                                console.error('❌ Функция openDeepLink не найдена!');
+                            }
+                        }, 500);  // Минимальная задержка для отображения сообщения
                         
-                        // Также добавляем обычную HTML кнопку как fallback
-                        const buttonContainer = document.createElement('div');
-                        buttonContainer.id = 'fallback-button-container';
-                        buttonContainer.style.cssText = 'margin-top: 20px; text-align: center;';
-                        buttonContainer.innerHTML = `
-                            <button onclick="window.openDeepLink()" style="padding: 12px 24px; background: #0088cc; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold;">
-                                ✅ Завершить авторизацию (альтернативная кнопка)
-                            </button>
-                        `;
-                        document.querySelector('.container').appendChild(buttonContainer);
-                        console.log('✅ Альтернативная HTML кнопка добавлена');
+                        // Кнопки убраны - deep link открывается автоматически
+                        // Если автоматическое открытие не сработало, пользователь может использовать команду /connect_wallet
                         
-                        // Обновляем статус с инструкцией
-                        if (!sendSuccess) {
-                            statusDiv.className = 'status success';
-                            statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Нажмите кнопку <b>"✅ Завершить авторизацию"</b> ниже для завершения авторизации.<br><br><small>Адрес кошелька: <code id="wallet-addr-copy">' + wallet.account.address + '</code><br><br><button onclick="copyAddress()" style="margin-top: 10px; padding: 8px 16px; background: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer;">📋 Копировать адрес</button><br><br><b>Или отправьте в бота:</b><br><code>/connect_wallet ' + wallet.account.address + '</code></small>';
-                            statusDiv.style.display = 'block';
-                        }
+                        // Статус уже обновлен выше при автоматическом открытии deep link
                         
                         // Показываем deep link для отладки (в консоли и визуально)
                         debugLog('🔗 Полный deep link создан', 'info');
