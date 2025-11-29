@@ -353,29 +353,30 @@
                             console.log('   Deep Link:', deepLink);
                             
                             // Пробуем разные способы открытия
-                            if (tg.openTelegramLink) {
-                                console.log('   Используем tg.openTelegramLink');
-                                tg.openTelegramLink(deepLink);
-                            } else if (tg.openLink) {
-                                console.log('   Используем tg.openLink');
-                                tg.openLink(deepLink);
-                            } else {
-                                console.log('   Используем window.location');
-                                window.location.href = deepLink;
-                            }
-                            
-                            // Закрываем Mini App через небольшую задержку
-                            setTimeout(() => {
-                                console.log('🔒 Закрытие Mini App');
-                                if (tg.close) {
-                                    tg.close();
+                            try {
+                                if (tg.openTelegramLink) {
+                                    console.log('   Используем tg.openTelegramLink');
+                                    tg.openTelegramLink(deepLink);
+                                } else if (tg.openLink) {
+                                    console.log('   Используем tg.openLink');
+                                    tg.openLink(deepLink);
+                                } else {
+                                    console.log('   Используем window.location');
+                                    window.location.href = deepLink;
                                 }
-                            }, 1000);
+                                
+                                // НЕ закрываем Mini App сразу - даем пользователю время увидеть результат
+                                // Закрытие произойдет автоматически при переходе по deep link
+                            } catch (error) {
+                                console.error('❌ Ошибка открытия deep link:', error);
+                                statusDiv.className = 'status error';
+                                statusDiv.innerHTML = '❌ <b>Ошибка открытия deep link</b><br><br>Попробуйте нажать кнопку "✅ Завершить авторизацию" еще раз.<br><br><small>Адрес кошелька: <code>' + wallet.account.address + '</code></small>';
+                            }
                         };
                         
-                        // Сразу открываем deep link автоматически (без задержки)
-                        console.log('🚀 Автоматическое открытие deep link...');
-                        openDeepLink();
+                        // НЕ открываем deep link автоматически - ждем нажатия кнопки
+                        // Это предотвращает автоматическое закрытие Mini App
+                        console.log('⏸️ Ожидание нажатия кнопки пользователем...');
                         
                         // Показываем кнопку для открытия deep link (на случай, если автоматическое открытие не сработало)
                         if (tg.MainButton) {
@@ -387,7 +388,7 @@
                         
                         // Обновляем статус с инструкцией
                         statusDiv.className = 'status success';
-                        statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Авторизация завершается автоматически...<br><br>Если ничего не произошло, нажмите кнопку <b>"✅ Завершить авторизацию"</b> ниже.<br><br><small>Адрес кошелька: <code id="wallet-addr-copy">' + wallet.account.address + '</code><br><button onclick="copyAddress()" style="margin-top: 10px; padding: 8px 16px; background: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer;">📋 Копировать адрес</button></small>';
+                        statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Нажмите кнопку <b>"✅ Завершить авторизацию"</b> ниже для завершения авторизации.<br><br><small>Адрес кошелька: <code id="wallet-addr-copy">' + wallet.account.address + '</code><br><button onclick="copyAddress()" style="margin-top: 10px; padding: 8px 16px; background: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer;">📋 Копировать адрес</button></small>';
                         statusDiv.style.display = 'block';
                         
                         // Добавляем функцию копирования адреса
