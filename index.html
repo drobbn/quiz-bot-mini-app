@@ -168,16 +168,47 @@
                     walletName: walletName
                 };
                 
-                console.log('📤 Отправка данных в бот:', dataToSend);
-                console.log('📤 JSON строка:', JSON.stringify(dataToSend));
+                const jsonString = JSON.stringify(dataToSend);
+                
+                // Детальное логирование
+                console.log('='.repeat(60));
+                console.log('📤 ОТПРАВКА ДАННЫХ В БОТ');
+                console.log('='.repeat(60));
+                console.log('📋 Данные:', dataToSend);
+                console.log('📋 JSON строка:', jsonString);
+                console.log('📋 Длина JSON:', jsonString.length);
+                console.log('📋 tg.sendData доступен:', typeof tg.sendData === 'function');
+                console.log('📋 tg объект:', tg);
+                
+                // Сохраняем в localStorage для отладки
+                try {
+                    const debugLog = {
+                        timestamp: new Date().toISOString(),
+                        data: dataToSend,
+                        jsonString: jsonString,
+                        userId: userId,
+                        walletAddress: wallet.account.address
+                    };
+                    localStorage.setItem('last_webapp_send', JSON.stringify(debugLog));
+                    console.log('💾 Данные сохранены в localStorage для отладки');
+                } catch (e) {
+                    console.warn('⚠️ Не удалось сохранить в localStorage:', e);
+                }
                 
                 try {
                     if (!tg.sendData) {
                         throw new Error('tg.sendData не доступен');
                     }
                     
-                    tg.sendData(JSON.stringify(dataToSend));
-                    console.log('✅ Данные отправлены через tg.sendData');
+                    console.log('🚀 Вызов tg.sendData...');
+                    tg.sendData(jsonString);
+                    console.log('✅ tg.sendData вызван успешно');
+                    
+                    // Сохраняем статус успешной отправки
+                    try {
+                        localStorage.setItem('last_send_status', 'success');
+                        localStorage.setItem('last_send_time', new Date().toISOString());
+                    } catch (e) {}
                     
                     // Закрываем Mini App через 2 секунды
                     setTimeout(() => {
@@ -185,10 +216,29 @@
                         tg.close();
                     }, 2000);
                 } catch (error) {
-                    console.error('❌ Ошибка отправки данных:', error);
+                    console.error('='.repeat(60));
+                    console.error('❌ ОШИБКА ОТПРАВКИ ДАННЫХ');
+                    console.error('='.repeat(60));
+                    console.error('Ошибка:', error);
+                    console.error('Тип ошибки:', error.constructor.name);
+                    console.error('Сообщение:', error.message);
+                    console.error('Стек:', error.stack);
+                    
+                    // Сохраняем ошибку
+                    try {
+                        localStorage.setItem('last_send_status', 'error');
+                        localStorage.setItem('last_send_error', JSON.stringify({
+                            message: error.message,
+                            stack: error.stack,
+                            timestamp: new Date().toISOString()
+                        }));
+                    } catch (e) {}
+                    
                     statusDiv.className = 'status error';
                     statusDiv.textContent = '❌ Ошибка отправки данных: ' + error.message;
                 }
+                
+                console.log('='.repeat(60));
             } else {
                 // Кошелек отключен
                 statusDiv.className = 'status';
