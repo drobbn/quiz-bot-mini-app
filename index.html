@@ -205,6 +205,56 @@
             console.log('ℹ️ Кошелек не подключен при загрузке');
         });
 
+        // Глобальная переменная для deep link (чтобы кнопка могла её использовать)
+        let globalDeepLink = null;
+        let globalWalletData = null;
+        
+        // Глобальная функция для открытия deep link
+        window.openDeepLink = function() {
+            if (!globalDeepLink) {
+                console.error('❌ Deep link не создан!');
+                return;
+            }
+            
+            console.log('='.repeat(60));
+            console.log('🔗 ОТКРЫТИЕ DEEP LINK (из глобальной функции)');
+            console.log('='.repeat(60));
+            console.log('   Deep Link:', globalDeepLink);
+            console.log('   Длина deep link:', globalDeepLink.length);
+            console.log('   tg.openTelegramLink доступен:', typeof tg.openTelegramLink === 'function');
+            console.log('   tg.openLink доступен:', typeof tg.openLink === 'function');
+            console.log('   tg.close доступен:', typeof tg.close === 'function');
+            
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                // Пробуем разные способы открытия
+                if (tg.openTelegramLink) {
+                    console.log('   ✅ Используем tg.openTelegramLink');
+                    tg.openTelegramLink(globalDeepLink);
+                    console.log('   ✅ tg.openTelegramLink вызван');
+                } else if (tg.openLink) {
+                    console.log('   ✅ Используем tg.openLink');
+                    tg.openLink(globalDeepLink);
+                    console.log('   ✅ tg.openLink вызван');
+                } else {
+                    console.log('   ⚠️ Используем window.location (fallback)');
+                    window.location.href = globalDeepLink;
+                    console.log('   ✅ window.location.href установлен');
+                }
+                
+                // Обновляем статус
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = '✅ <b>Авторизация завершается...</b><br><br>Переход к боту...<br><br><small>Если ничего не произошло, проверьте логи бота</small>';
+                
+            } catch (error) {
+                console.error('❌ Ошибка открытия deep link:', error);
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ <b>Ошибка открытия deep link</b><br><br>Попробуйте нажать кнопку еще раз.<br><br><small>Ошибка: ' + error.message + '</small>';
+            }
+            console.log('='.repeat(60));
+        };
+        
         // Обработка изменения статуса кошелька
         tonConnectUI.onStatusChange((wallet) => {
             const statusDiv = document.getElementById('status');
@@ -399,10 +449,15 @@
                         
                         const deepLink = `https://t.me/${botUsername}?start=wallet_${encodedData}`;
                         
+                        // Сохраняем в глобальную переменную для использования кнопкой
+                        globalDeepLink = deepLink;
+                        globalWalletData = jsonString;
+                        
                         console.log('🔗 Deep link создан:');
                         console.log('   Bot Username:', botUsername);
                         console.log('   Encoded Data (первые 50 символов):', encodedData.substring(0, 50));
                         console.log('   Full Deep Link:', deepLink);
+                        console.log('   ✅ Deep link сохранен в глобальную переменную');
                         
                         // Сохраняем deep link в localStorage
                         localStorage.setItem('wallet_deep_link', deepLink);
@@ -410,74 +465,21 @@
                         localStorage.setItem('wallet_data', jsonString);
                         localStorage.setItem('bot_username', botUsername);
                         
-                        // Функция для открытия deep link
-                        const openDeepLink = () => {
-                            console.log('='.repeat(60));
-                            console.log('🔗 ОТКРЫТИЕ DEEP LINK');
-                            console.log('='.repeat(60));
-                            console.log('   Deep Link:', deepLink);
-                            console.log('   Длина deep link:', deepLink.length);
-                            console.log('   tg.openTelegramLink доступен:', typeof tg.openTelegramLink === 'function');
-                            console.log('   tg.openLink доступен:', typeof tg.openLink === 'function');
-                            
-                            // ВАЖНО: НЕ закрываем Mini App перед открытием deep link
-                            // Telegram автоматически закроет Mini App при переходе по deep link
-                            
-                            // Пробуем разные способы открытия
-                            try {
-                                // Используем tg.openTelegramLink - это правильный способ для deep links в Telegram
-                                if (tg.openTelegramLink) {
-                                    console.log('   ✅ Используем tg.openTelegramLink');
-                                    console.log('   Вызов: tg.openTelegramLink("' + deepLink.substring(0, 50) + '...")');
-                                    // НЕ вызываем tg.close() - Telegram закроет Mini App автоматически
-                                    tg.openTelegramLink(deepLink);
-                                    console.log('   ✅ tg.openTelegramLink вызван успешно');
-                                } else if (tg.openLink) {
-                                    console.log('   ✅ Используем tg.openLink');
-                                    tg.openLink(deepLink);
-                                    console.log('   ✅ tg.openLink вызван успешно');
-                                } else {
-                                    console.log('   ⚠️ Используем window.location (fallback)');
-                                    // Для fallback используем window.location, но это может не сработать в Mini App
-                                    window.location.href = deepLink;
-                                    console.log('   ✅ window.location.href установлен');
-                                }
-                                
-                                // Обновляем статус
-                                statusDiv.className = 'status success';
-                                statusDiv.innerHTML = '✅ <b>Авторизация завершается...</b><br><br>Переход к боту...<br><br><small>Если ничего не произошло, проверьте логи бота</small>';
-                                
-                                // Сохраняем в localStorage для отладки
-                                try {
-                                    localStorage.setItem('last_deep_link_attempt', JSON.stringify({
-                                        timestamp: new Date().toISOString(),
-                                        deepLink: deepLink,
-                                        method: tg.openTelegramLink ? 'openTelegramLink' : (tg.openLink ? 'openLink' : 'window.location')
-                                    }));
-                                } catch (e) {}
-                                
-                            } catch (error) {
-                                console.error('❌ Ошибка открытия deep link:', error);
-                                console.error('   Тип ошибки:', error.constructor.name);
-                                console.error('   Сообщение:', error.message);
-                                console.error('   Стек:', error.stack);
-                                statusDiv.className = 'status error';
-                                statusDiv.innerHTML = '❌ <b>Ошибка открытия deep link</b><br><br>Попробуйте нажать кнопку "✅ Завершить авторизацию" еще раз.<br><br><small>Адрес кошелька: <code>' + wallet.account.address + '</code><br>Ошибка: ' + error.message + '</small>';
-                            }
-                            console.log('='.repeat(60));
-                        };
-                        
                         // Если tg.sendData не сработал, автоматически открываем deep link через небольшую задержку
                         if (!sendSuccess) {
-                            console.log('⚠️ tg.sendData не сработал, используем deep link через 1.5 секунды...');
+                            console.log('⚠️ tg.sendData не сработал, используем deep link через 2 секунды...');
                             statusDiv.className = 'status success';
-                            statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Автоматически завершаю авторизацию...<br><br><small>Если ничего не произошло, нажмите кнопку ниже</small>';
+                            statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Автоматически завершаю авторизацию через 2 секунды...<br><br><small>Если ничего не произошло, нажмите кнопку ниже</small>';
                             statusDiv.style.display = 'block';
                             
                             setTimeout(() => {
                                 console.log('🔗 Автоматическое открытие deep link...');
-                                openDeepLink();
-                            }, 1500);
+                                if (window.openDeepLink) {
+                                    window.openDeepLink();
+                                } else {
+                                    console.error('❌ Функция openDeepLink не найдена!');
+                                }
+                            }, 2000);
                         } else {
                             // Если tg.sendData сработал, все равно показываем кнопку на случай, если данные не дошли
                             console.log('✅ tg.sendData вызван, но показываем кнопку на всякий случай');
@@ -486,10 +488,31 @@
                         // Показываем кнопку для открытия deep link (на случай, если автоматическое открытие не сработало)
                         if (tg.MainButton) {
                             tg.MainButton.setText('✅ Завершить авторизацию');
-                            tg.MainButton.onClick(openDeepLink);
+                            tg.MainButton.onClick(() => {
+                                console.log('🔘 Кнопка "Завершить авторизацию" нажата');
+                                if (window.openDeepLink) {
+                                    window.openDeepLink();
+                                } else {
+                                    console.error('❌ Функция openDeepLink не найдена!');
+                                    statusDiv.className = 'status error';
+                                    statusDiv.innerHTML = '❌ <b>Ошибка:</b> функция не найдена. Попробуйте обновить страницу.';
+                                }
+                            });
                             tg.MainButton.show();
-                            console.log('✅ Кнопка показана пользователю');
+                            console.log('✅ Кнопка показана пользователю и привязана к функции openDeepLink');
                         }
+                        
+                        // Также добавляем обычную HTML кнопку как fallback
+                        const buttonContainer = document.createElement('div');
+                        buttonContainer.id = 'fallback-button-container';
+                        buttonContainer.style.cssText = 'margin-top: 20px; text-align: center;';
+                        buttonContainer.innerHTML = `
+                            <button onclick="window.openDeepLink()" style="padding: 12px 24px; background: #0088cc; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold;">
+                                ✅ Завершить авторизацию (альтернативная кнопка)
+                            </button>
+                        `;
+                        document.querySelector('.container').appendChild(buttonContainer);
+                        console.log('✅ Альтернативная HTML кнопка добавлена');
                         
                         // Обновляем статус с инструкцией
                         if (!sendSuccess) {
