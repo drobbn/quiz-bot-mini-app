@@ -413,17 +413,27 @@
                     console.warn('Не удалось определить название кошелька:', e);
                 }
 
+                // ВАЖНО: Логируем полную структуру wallet для отладки
+                debugLog('📋 Полная структура wallet:', 'info');
+                debugLog(`   wallet.account.address: ${wallet.account.address}`, 'info');
+                debugLog(`   wallet.account.chain: ${wallet.account.chain}`, 'info');
+                debugLog(`   wallet.account.publicKey: ${wallet.account.publicKey ? wallet.account.publicKey.substring(0, 20) + '...' : 'N/A'}`, 'info');
+                debugLog(`   wallet.device: ${wallet.device ? JSON.stringify(wallet.device).substring(0, 100) + '...' : 'N/A'}`, 'info');
+                
                 // Отправляем данные в бота через Telegram Web App
+                // Используем минимальный набор данных для надежности
                 const dataToSend = {
                     type: 'wallet_connected',
                     address: wallet.account.address,
-                    chain: wallet.account.chain,
-                    publicKey: wallet.account.publicKey,
-                    userId: userId,
+                    chain: wallet.account.chain || 'mainnet',
+                    publicKey: wallet.account.publicKey || '',
                     walletName: walletName
                 };
                 
                 const jsonString = JSON.stringify(dataToSend);
+                
+                debugLog(`📤 Данные для отправки (длина: ${jsonString.length}):`, 'info');
+                debugLog(`   ${jsonString.substring(0, 150)}...`, 'info');
                 
                 // Детальное логирование
                 console.log('='.repeat(60));
@@ -489,11 +499,18 @@
                         // Согласно документации Telegram Web App, tg.sendData отправляет данные в бота
                         // Данные должны быть строкой не более 4096 символов
                         if (jsonString.length > 4096) {
+                            debugLog('❌ Данные слишком длинные для tg.sendData', 'error');
                             console.error('❌ Данные слишком длинные для tg.sendData (максимум 4096 символов)');
                             console.error('   Длина данных:', jsonString.length);
                             sendSuccess = false;
                         } else {
+                            debugLog('🚀 Вызов tg.sendData...', 'info');
+                            debugLog(`   Длина данных: ${jsonString.length} символов`, 'info');
+                            
+                            // ВАЖНО: tg.sendData должен быть вызван СИНХРОННО, без задержек
                             tg.sendData(jsonString);
+                            
+                            debugLog('✅ tg.sendData вызван успешно', 'success');
                             console.log('✅ tg.sendData вызван успешно');
                             console.log('   Длина данных:', jsonString.length, 'символов');
                             sendSuccess = true;
@@ -501,13 +518,18 @@
                             // Сохраняем статус отправки
                             localStorage.setItem('last_send_status', 'success');
                             localStorage.setItem('last_send_timestamp', new Date().toISOString());
+                            localStorage.setItem('last_send_data', jsonString);
                             
                             // Показываем успешное сообщение
                             statusDiv.className = 'status success';
                             statusDiv.innerHTML = '✅ <b>Данные отправлены в бота!</b><br><br>Проверьте бота для подтверждения авторизации.<br><br><small>Если авторизация не прошла, нажмите кнопку ниже для альтернативного способа.</small>';
                             statusDiv.style.display = 'block';
+                            
+                            // ВАЖНО: Не закрываем Mini App сразу - даем время на обработку
+                            debugLog('⏳ Ожидание обработки данных ботом...', 'info');
                         }
                     } catch (sendError) {
+                        debugLog(`❌ Ошибка tg.sendData: ${sendError.message}`, 'error');
                         console.warn('⚠️ tg.sendData не сработал:', sendError);
                         console.error('   Ошибка:', sendError.message);
                         console.error('   Стек:', sendError.stack);
@@ -570,17 +592,43 @@
                             return;
                         }
                         
-                        const deepLink = `https://t.me/${botUsername}?start=wallet_${encodedData}`;
+                        // ВАЖНО: Для deep link используем ТОЛЬКО адрес кошелька
+                        // Это гарантирует, что параметр не будет обрезан Telegram
+                        // Остальные данные (chain, publicKey, walletName) можно получить из БД или API
+                        const shortData = btoa(JSON.stringify({
+                            type: 'wallet_connected',
+                            address: wallet.account.address
+                        })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                        
+                        const deepLink = `https://t.me/${botUsername}?start=wallet_${shortData}`;
+                        
+                        debugLog('🔗 Deep link создан (упрощенный формат)', 'info');
+                        debugLog(`   Используется только адрес кошелька`, 'info');
+                        debugLog(`   Длина deep link: ${deepLink.length} символов`, 'info');
                         
                         // Сохраняем в глобальную переменную для использования кнопкой
                         globalDeepLink = deepLink;
                         globalWalletData = jsonString;
                         
+                        debugLog('🔗 Deep link создан', 'success');
+                        debugLog(`   Bot Username: ${botUsername}`, 'info');
+                        debugLog(`   Длина encoded data: ${encodedData.length}`, 'info');
+                        debugLog(`   Длина deep link: ${deepLink.length}`, 'info');
+                        debugLog(`   Deep link (первые 100 символов): ${deepLink.substring(0, 100)}...`, 'info');
+                        
                         console.log('🔗 Deep link создан:');
                         console.log('   Bot Username:', botUsername);
                         console.log('   Encoded Data (первые 50 символов):', encodedData.substring(0, 50));
+                        console.log('   Encoded Data (полная длина):', encodedData.length);
                         console.log('   Full Deep Link:', deepLink);
+                        console.log('   Full Deep Link (длина):', deepLink.length);
                         console.log('   ✅ Deep link сохранен в глобальную переменную');
+                        
+                        // Проверяем, не слишком ли длинный deep link
+                        if (deepLink.length > 2000) {
+                            debugLog('⚠️ ВНИМАНИЕ: Deep link очень длинный! Telegram может обрезать его.', 'warning');
+                            console.warn('⚠️ ВНИМАНИЕ: Deep link очень длинный! Telegram может обрезать его.');
+                        }
                         
                         // Сохраняем deep link в localStorage
                         localStorage.setItem('wallet_deep_link', deepLink);
@@ -650,7 +698,12 @@
                             statusDiv.style.display = 'block';
                         }
                         
-                        // Показываем deep link для отладки (в консоли)
+                        // Показываем deep link для отладки (в консоли и визуально)
+                        debugLog('🔗 Полный deep link создан', 'info');
+                        debugLog(`   Длина: ${deepLink.length} символов`, 'info');
+                        debugLog(`   Начало: ${deepLink.substring(0, 80)}...`, 'info');
+                        debugLog(`   Конец: ...${deepLink.substring(deepLink.length - 80)}`, 'info');
+                        
                         console.log('='.repeat(60));
                         console.log('🔗 DEEP LINK ДЛЯ ОТЛАДКИ:');
                         console.log('='.repeat(60));
@@ -659,6 +712,14 @@
                         console.log('💡 Если кнопка не работает, скопируйте адрес кошелька выше и отправьте в бота командой:');
                         console.log(`/connect_wallet ${wallet.account.address}`);
                         console.log('='.repeat(60));
+                        
+                        // ВАЖНО: Проверяем, не обрезается ли deep link при открытии
+                        // Telegram может обрезать очень длинные deep links
+                        if (deepLink.length > 2000) {
+                            debugLog('⚠️ ВНИМАНИЕ: Deep link очень длинный!', 'warning');
+                            debugLog('   Telegram может обрезать параметры длиннее 2000 символов', 'warning');
+                            debugLog('   Используйте команду /connect_wallet как альтернативу', 'warning');
+                        }
                         
                         // Добавляем функцию копирования адреса
                         window.copyAddress = function() {
