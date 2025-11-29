@@ -105,6 +105,21 @@
     <script>
         // Инициализация Telegram Web App
         const tg = window.Telegram.WebApp;
+        
+        // Проверяем, что мы в Telegram (не в браузере)
+        const isTelegram = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
+        console.log('🔍 Проверка окружения:');
+        console.log('   isTelegram:', isTelegram);
+        console.log('   tg.platform:', tg.platform);
+        console.log('   tg.initData:', tg.initData ? 'есть' : 'нет');
+        console.log('   tg.initDataUnsafe:', tg.initDataUnsafe ? 'есть' : 'нет');
+        
+        if (!isTelegram && !tg.initData) {
+            console.error('⚠️ ВНИМАНИЕ: Mini App открыт не в Telegram!');
+            console.error('⚠️ Данные могут не дойти до бота!');
+            console.error('⚠️ Откройте Mini App через Telegram бота!');
+        }
+        
         tg.ready();
         tg.expand();
 
@@ -213,13 +228,29 @@
                 }
                 
                 try {
+                    // Проверяем, что мы в Telegram
+                    if (!tg.initData && !tg.initDataUnsafe) {
+                        throw new Error('Mini App открыт не в Telegram! Откройте через Telegram бота!');
+                    }
+                    
                     if (!tg.sendData) {
                         throw new Error('tg.sendData не доступен');
                     }
                     
                     console.log('🚀 Вызов tg.sendData...');
+                    console.log('   Данные для отправки:', jsonString);
+                    console.log('   Длина данных:', jsonString.length);
+                    console.log('   tg.platform:', tg.platform);
+                    console.log('   tg.initData:', tg.initData ? 'есть' : 'нет');
+                    
+                    // Отправляем данные
                     tg.sendData(jsonString);
                     console.log('✅ tg.sendData вызван успешно');
+                    
+                    // Проверяем, что данные действительно отправлены
+                    console.log('🔍 Проверка после отправки:');
+                    console.log('   tg.isExpanded:', tg.isExpanded);
+                    console.log('   tg.version:', tg.version);
                     
                     // Сохраняем статус успешной отправки
                     try {
