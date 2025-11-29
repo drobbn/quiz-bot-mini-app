@@ -185,9 +185,10 @@
             uiPreferences: {
                 theme: tg.colorScheme === 'dark' ? 'DARK' : 'LIGHT'
             },
-            actionsConfiguration: {
-                twaReturnUrl: `https://t.me/${botUsername}`
-            }
+            // ВАЖНО: Убираем twaReturnUrl, чтобы предотвратить автоматическое закрытие
+            // actionsConfiguration: {
+            //     twaReturnUrl: `https://t.me/${botUsername}`
+            // }
         });
 
         // Проверяем, подключен ли уже кошелек при загрузке
@@ -219,16 +220,22 @@
                 walletInfoDiv.style.display = 'block';
                 walletAddressDiv.textContent = wallet.account.address;
 
-                // Определяем название кошелька
+                // Определяем название кошелька из разных источников
                 let walletName = 'unknown';
                 try {
+                    // Согласно документации TON Connect, wallet.device содержит DeviceInfo
                     if (wallet.device && wallet.device.appName) {
-                        walletName = wallet.device.appName;
+                        walletName = wallet.device.appName.toLowerCase();
+                        console.log('   Кошелек из device.appName:', walletName);
                     } else if (wallet.provider) {
-                        walletName = wallet.provider;
+                        walletName = wallet.provider.toLowerCase();
+                        console.log('   Кошелек из provider:', walletName);
                     } else if (wallet.walletInfo && wallet.walletInfo.name) {
-                        walletName = wallet.walletInfo.name;
+                        walletName = wallet.walletInfo.name.toLowerCase();
+                        console.log('   Кошелек из walletInfo.name:', walletName);
                     }
+                    // Дополнительная проверка по адресу (если есть информация о типе кошелька)
+                    console.log('   Полный объект wallet:', JSON.stringify(wallet, null, 2));
                 } catch (e) {
                     console.warn('Не удалось определить название кошелька:', e);
                 }
@@ -306,12 +313,39 @@
                     let sendSuccess = false;
                     
                     try {
-                        tg.sendData(jsonString);
-                        console.log('✅ tg.sendData вызван успешно');
-                        sendSuccess = true;
+                        // Согласно документации Telegram Web App, tg.sendData отправляет данные в бота
+                        // Данные должны быть строкой не более 4096 символов
+                        if (jsonString.length > 4096) {
+                            console.error('❌ Данные слишком длинные для tg.sendData (максимум 4096 символов)');
+                            console.error('   Длина данных:', jsonString.length);
+                            sendSuccess = false;
+                        } else {
+                            tg.sendData(jsonString);
+                            console.log('✅ tg.sendData вызван успешно');
+                            console.log('   Длина данных:', jsonString.length, 'символов');
+                            sendSuccess = true;
+                            
+                            // Сохраняем статус отправки
+                            localStorage.setItem('last_send_status', 'success');
+                            localStorage.setItem('last_send_timestamp', new Date().toISOString());
+                            
+                            // Показываем успешное сообщение
+                            statusDiv.className = 'status success';
+                            statusDiv.innerHTML = '✅ <b>Данные отправлены в бота!</b><br><br>Проверьте бота для подтверждения авторизации.<br><br><small>Если авторизация не прошла, нажмите кнопку ниже для альтернативного способа.</small>';
+                            statusDiv.style.display = 'block';
+                        }
                     } catch (sendError) {
                         console.warn('⚠️ tg.sendData не сработал:', sendError);
+                        console.error('   Ошибка:', sendError.message);
+                        console.error('   Стек:', sendError.stack);
                         sendSuccess = false;
+                        
+                        // Сохраняем ошибку
+                        localStorage.setItem('last_send_status', 'error');
+                        localStorage.setItem('last_send_error', JSON.stringify({
+                            message: sendError.message,
+                            stack: sendError.stack
+                        }));
                     }
                     
                     // Сохраняем данные для отправки через deep link
@@ -378,8 +412,13 @@
                         
                         // Функция для открытия deep link
                         const openDeepLink = () => {
-                            console.log('🔗 Открываем deep link...');
+                            console.log('='.repeat(60));
+                            console.log('🔗 ОТКРЫТИЕ DEEP LINK');
+                            console.log('='.repeat(60));
                             console.log('   Deep Link:', deepLink);
+                            console.log('   Длина deep link:', deepLink.length);
+                            console.log('   tg.openTelegramLink доступен:', typeof tg.openTelegramLink === 'function');
+                            console.log('   tg.openLink доступен:', typeof tg.openLink === 'function');
                             
                             // ВАЖНО: НЕ закрываем Mini App перед открытием deep link
                             // Telegram автоматически закроет Mini App при переходе по deep link
@@ -388,32 +427,61 @@
                             try {
                                 // Используем tg.openTelegramLink - это правильный способ для deep links в Telegram
                                 if (tg.openTelegramLink) {
-                                    console.log('   Используем tg.openTelegramLink');
+                                    console.log('   ✅ Используем tg.openTelegramLink');
+                                    console.log('   Вызов: tg.openTelegramLink("' + deepLink.substring(0, 50) + '...")');
                                     // НЕ вызываем tg.close() - Telegram закроет Mini App автоматически
                                     tg.openTelegramLink(deepLink);
+                                    console.log('   ✅ tg.openTelegramLink вызван успешно');
                                 } else if (tg.openLink) {
-                                    console.log('   Используем tg.openLink');
+                                    console.log('   ✅ Используем tg.openLink');
                                     tg.openLink(deepLink);
+                                    console.log('   ✅ tg.openLink вызван успешно');
                                 } else {
-                                    console.log('   Используем window.location (fallback)');
+                                    console.log('   ⚠️ Используем window.location (fallback)');
                                     // Для fallback используем window.location, но это может не сработать в Mini App
                                     window.location.href = deepLink;
+                                    console.log('   ✅ window.location.href установлен');
                                 }
                                 
                                 // Обновляем статус
                                 statusDiv.className = 'status success';
-                                statusDiv.innerHTML = '✅ <b>Авторизация завершается...</b><br><br>Переход к боту...';
+                                statusDiv.innerHTML = '✅ <b>Авторизация завершается...</b><br><br>Переход к боту...<br><br><small>Если ничего не произошло, проверьте логи бота</small>';
+                                
+                                // Сохраняем в localStorage для отладки
+                                try {
+                                    localStorage.setItem('last_deep_link_attempt', JSON.stringify({
+                                        timestamp: new Date().toISOString(),
+                                        deepLink: deepLink,
+                                        method: tg.openTelegramLink ? 'openTelegramLink' : (tg.openLink ? 'openLink' : 'window.location')
+                                    }));
+                                } catch (e) {}
                                 
                             } catch (error) {
                                 console.error('❌ Ошибка открытия deep link:', error);
+                                console.error('   Тип ошибки:', error.constructor.name);
+                                console.error('   Сообщение:', error.message);
+                                console.error('   Стек:', error.stack);
                                 statusDiv.className = 'status error';
-                                statusDiv.innerHTML = '❌ <b>Ошибка открытия deep link</b><br><br>Попробуйте нажать кнопку "✅ Завершить авторизацию" еще раз.<br><br><small>Адрес кошелька: <code>' + wallet.account.address + '</code></small>';
+                                statusDiv.innerHTML = '❌ <b>Ошибка открытия deep link</b><br><br>Попробуйте нажать кнопку "✅ Завершить авторизацию" еще раз.<br><br><small>Адрес кошелька: <code>' + wallet.account.address + '</code><br>Ошибка: ' + error.message + '</small>';
                             }
+                            console.log('='.repeat(60));
                         };
                         
-                        // НЕ открываем deep link автоматически - ждем нажатия кнопки
-                        // Это предотвращает автоматическое закрытие Mini App
-                        console.log('⏸️ Ожидание нажатия кнопки пользователем...');
+                        // Если tg.sendData не сработал, автоматически открываем deep link через небольшую задержку
+                        if (!sendSuccess) {
+                            console.log('⚠️ tg.sendData не сработал, используем deep link через 1.5 секунды...');
+                            statusDiv.className = 'status success';
+                            statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Автоматически завершаю авторизацию...<br><br><small>Если ничего не произошло, нажмите кнопку ниже</small>';
+                            statusDiv.style.display = 'block';
+                            
+                            setTimeout(() => {
+                                console.log('🔗 Автоматическое открытие deep link...');
+                                openDeepLink();
+                            }, 1500);
+                        } else {
+                            // Если tg.sendData сработал, все равно показываем кнопку на случай, если данные не дошли
+                            console.log('✅ tg.sendData вызван, но показываем кнопку на всякий случай');
+                        }
                         
                         // Показываем кнопку для открытия deep link (на случай, если автоматическое открытие не сработало)
                         if (tg.MainButton) {
@@ -424,9 +492,21 @@
                         }
                         
                         // Обновляем статус с инструкцией
-                        statusDiv.className = 'status success';
-                        statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Нажмите кнопку <b>"✅ Завершить авторизацию"</b> ниже для завершения авторизации.<br><br><small>Адрес кошелька: <code id="wallet-addr-copy">' + wallet.account.address + '</code><br><button onclick="copyAddress()" style="margin-top: 10px; padding: 8px 16px; background: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer;">📋 Копировать адрес</button></small>';
-                        statusDiv.style.display = 'block';
+                        if (!sendSuccess) {
+                            statusDiv.className = 'status success';
+                            statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Нажмите кнопку <b>"✅ Завершить авторизацию"</b> ниже для завершения авторизации.<br><br><small>Адрес кошелька: <code id="wallet-addr-copy">' + wallet.account.address + '</code><br><br><button onclick="copyAddress()" style="margin-top: 10px; padding: 8px 16px; background: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer;">📋 Копировать адрес</button><br><br><b>Или отправьте в бота:</b><br><code>/connect_wallet ' + wallet.account.address + '</code></small>';
+                            statusDiv.style.display = 'block';
+                        }
+                        
+                        // Показываем deep link для отладки (в консоли)
+                        console.log('='.repeat(60));
+                        console.log('🔗 DEEP LINK ДЛЯ ОТЛАДКИ:');
+                        console.log('='.repeat(60));
+                        console.log(deepLink);
+                        console.log('='.repeat(60));
+                        console.log('💡 Если кнопка не работает, скопируйте адрес кошелька выше и отправьте в бота командой:');
+                        console.log(`/connect_wallet ${wallet.account.address}`);
+                        console.log('='.repeat(60));
                         
                         // Добавляем функцию копирования адреса
                         window.copyAddress = function() {
