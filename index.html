@@ -161,6 +161,20 @@
             }
         });
 
+        // Проверяем, подключен ли уже кошелек при загрузке
+        tonConnectUI.connectionRestored.then((wallet) => {
+            if (wallet) {
+                console.log('🔍 Кошелек уже подключен при загрузке:', wallet.account.address);
+                // НЕ закрываем Mini App автоматически - пользователь может отвязать кошелек
+                const walletInfoDiv = document.getElementById('wallet-info');
+                const walletAddressDiv = document.getElementById('wallet-address');
+                walletInfoDiv.style.display = 'block';
+                walletAddressDiv.textContent = wallet.account.address;
+            }
+        }).catch(() => {
+            console.log('ℹ️ Кошелек не подключен при загрузке');
+        });
+
         // Обработка изменения статуса кошелька
         tonConnectUI.onStatusChange((wallet) => {
             const statusDiv = document.getElementById('status');
@@ -271,58 +285,61 @@
                         sendSuccess = false;
                     }
                     
-                    // Если tg.sendData не сработал, используем альтернативный способ
-                    if (!sendSuccess) {
-                        console.log('🔄 Пробуем альтернативный способ отправки данных...');
+                    // ВСЕГДА используем альтернативный способ через deep link для надежности
+                    // (даже если tg.sendData сработал, на всякий случай)
+                    console.log('🔄 Настраиваем кнопку для завершения авторизации...');
+                    
+                    try {
+                        // Кодируем данные в base64 для передачи через URL
+                        const encodedData = btoa(jsonString).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                        const botUsername = urlParams.get('bot') || '';
+                        const deepLink = `https://t.me/${botUsername}?start=wallet_${encodedData}`;
                         
-                        // Способ 1: Используем tg.openTelegramLink с deep link
-                        try {
-                            // Кодируем данные в base64 для передачи через URL
-                            const encodedData = btoa(jsonString).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                            const botUsername = urlParams.get('bot') || '';
-                            const deepLink = `https://t.me/${botUsername}?start=wallet_${encodedData}`;
-                            
-                            console.log('🔗 Открываем deep link с данными:', deepLink.substring(0, 100) + '...');
-                            
-                            // Показываем кнопку для открытия deep link
-                            if (tg.MainButton) {
-                                tg.MainButton.setText('Нажмите для завершения авторизации');
-                                tg.MainButton.onClick(() => {
-                                    tg.openTelegramLink(deepLink);
-                                });
-                                tg.MainButton.show();
-                            } else {
-                                // Если MainButton недоступен, открываем напрямую
-                                tg.openTelegramLink(deepLink);
-                            }
-                            
-                            statusDiv.textContent = '✅ Кошелек подключен! Нажмите кнопку ниже для завершения.';
-                        } catch (linkError) {
-                            console.error('❌ Ошибка создания deep link:', linkError);
-                            statusDiv.className = 'status error';
-                            statusDiv.textContent = '❌ Ошибка отправки данных. Попробуйте еще раз.';
-                        }
-                    } else {
-                        // Если tg.sendData сработал, закрываем как обычно
+                        console.log('🔗 Deep link создан:', deepLink.substring(0, 100) + '...');
+                        
+                        // Показываем кнопку для открытия deep link
                         if (tg.MainButton) {
-                            tg.MainButton.setText('Данные отправлены!');
+                            tg.MainButton.setText('✅ Завершить авторизацию');
+                            tg.MainButton.onClick(() => {
+                                console.log('🔗 Открываем deep link...');
+                                tg.openTelegramLink(deepLink);
+                                // После открытия deep link закрываем Mini App
+                                setTimeout(() => {
+                                    console.log('🔒 Закрытие Mini App после нажатия кнопки');
+                                    tg.close();
+                                }, 500);
+                            });
+                            tg.MainButton.show();
+                            console.log('✅ Кнопка показана пользователю');
+                        } else {
+                            // Если MainButton недоступен, открываем напрямую
+                            console.log('⚠️ MainButton недоступен, открываем deep link напрямую');
+                            tg.openTelegramLink(deepLink);
                             setTimeout(() => {
-                                tg.MainButton.hide();
+                                tg.close();
                             }, 1000);
                         }
                         
-                        // Сохраняем статус успешной отправки
-                        try {
-                            localStorage.setItem('last_send_status', 'success');
-                            localStorage.setItem('last_send_time', new Date().toISOString());
-                        } catch (e) {}
+                        // Обновляем статус
+                        statusDiv.className = 'status success';
+                        statusDiv.textContent = '✅ Кошелек подключен!\n\nНажмите кнопку "✅ Завершить авторизацию" ниже для завершения.';
+                        statusDiv.style.display = 'block';
                         
-                        // Закрываем Mini App через 2 секунды
-                        setTimeout(() => {
-                            console.log('🔒 Закрытие Mini App');
-                            tg.close();
-                        }, 2000);
+                        // НЕ закрываем Mini App автоматически - пользователь сам закроет после нажатия кнопки
+                        console.log('⏸️ Mini App НЕ будет закрыт автоматически. Пользователь должен нажать кнопку.');
+                        
+                    } catch (linkError) {
+                        console.error('❌ Ошибка создания deep link:', linkError);
+                        statusDiv.className = 'status error';
+                        statusDiv.textContent = '❌ Ошибка отправки данных. Попробуйте еще раз.';
+                        statusDiv.style.display = 'block';
                     }
+                    
+                    // Сохраняем статус
+                    try {
+                        localStorage.setItem('last_send_status', sendSuccess ? 'success' : 'fallback');
+                        localStorage.setItem('last_send_time', new Date().toISOString());
+                    } catch (e) {}
                 } catch (error) {
                     console.error('='.repeat(60));
                     console.error('❌ ОШИБКА ОТПРАВКИ ДАННЫХ');
