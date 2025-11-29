@@ -259,34 +259,70 @@
                         tg.MainButton.show();
                     }
                     
-                    // Отправляем данные
-                    tg.sendData(jsonString);
-                    console.log('✅ tg.sendData вызван успешно');
+                    // Пробуем отправить данные через tg.sendData
+                    let sendSuccess = false;
                     
-                    // Ждем немного перед закрытием
-                    if (tg.MainButton) {
-                        tg.MainButton.setText('Данные отправлены!');
-                        setTimeout(() => {
-                            tg.MainButton.hide();
-                        }, 1000);
+                    try {
+                        tg.sendData(jsonString);
+                        console.log('✅ tg.sendData вызван успешно');
+                        sendSuccess = true;
+                    } catch (sendError) {
+                        console.warn('⚠️ tg.sendData не сработал:', sendError);
+                        sendSuccess = false;
                     }
                     
-                    // Проверяем, что данные действительно отправлены
-                    console.log('🔍 Проверка после отправки:');
-                    console.log('   tg.isExpanded:', tg.isExpanded);
-                    console.log('   tg.version:', tg.version);
-                    
-                    // Сохраняем статус успешной отправки
-                    try {
-                        localStorage.setItem('last_send_status', 'success');
-                        localStorage.setItem('last_send_time', new Date().toISOString());
-                    } catch (e) {}
-                    
-                    // Закрываем Mini App через 2 секунды
-                    setTimeout(() => {
-                        console.log('🔒 Закрытие Mini App');
-                        tg.close();
-                    }, 2000);
+                    // Если tg.sendData не сработал, используем альтернативный способ
+                    if (!sendSuccess) {
+                        console.log('🔄 Пробуем альтернативный способ отправки данных...');
+                        
+                        // Способ 1: Используем tg.openTelegramLink с deep link
+                        try {
+                            // Кодируем данные в base64 для передачи через URL
+                            const encodedData = btoa(jsonString).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                            const botUsername = urlParams.get('bot') || '';
+                            const deepLink = `https://t.me/${botUsername}?start=wallet_${encodedData}`;
+                            
+                            console.log('🔗 Открываем deep link с данными:', deepLink.substring(0, 100) + '...');
+                            
+                            // Показываем кнопку для открытия deep link
+                            if (tg.MainButton) {
+                                tg.MainButton.setText('Нажмите для завершения авторизации');
+                                tg.MainButton.onClick(() => {
+                                    tg.openTelegramLink(deepLink);
+                                });
+                                tg.MainButton.show();
+                            } else {
+                                // Если MainButton недоступен, открываем напрямую
+                                tg.openTelegramLink(deepLink);
+                            }
+                            
+                            statusDiv.textContent = '✅ Кошелек подключен! Нажмите кнопку ниже для завершения.';
+                        } catch (linkError) {
+                            console.error('❌ Ошибка создания deep link:', linkError);
+                            statusDiv.className = 'status error';
+                            statusDiv.textContent = '❌ Ошибка отправки данных. Попробуйте еще раз.';
+                        }
+                    } else {
+                        // Если tg.sendData сработал, закрываем как обычно
+                        if (tg.MainButton) {
+                            tg.MainButton.setText('Данные отправлены!');
+                            setTimeout(() => {
+                                tg.MainButton.hide();
+                            }, 1000);
+                        }
+                        
+                        // Сохраняем статус успешной отправки
+                        try {
+                            localStorage.setItem('last_send_status', 'success');
+                            localStorage.setItem('last_send_time', new Date().toISOString());
+                        } catch (e) {}
+                        
+                        // Закрываем Mini App через 2 секунды
+                        setTimeout(() => {
+                            console.log('🔒 Закрытие Mini App');
+                            tg.close();
+                        }, 2000);
+                    }
                 } catch (error) {
                     console.error('='.repeat(60));
                     console.error('❌ ОШИБКА ОТПРАВКИ ДАННЫХ');
