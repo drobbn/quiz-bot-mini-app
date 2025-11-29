@@ -111,7 +111,24 @@
         // Получаем параметры из URL
         const urlParams = new URLSearchParams(window.location.search);
         const botUsername = urlParams.get('bot') || '';
-        const userId = urlParams.get('user_id') || '';
+        
+        // Получаем userId из Telegram Web App API (приоритет) или из URL параметров
+        let userId = '';
+        try {
+            // Пытаемся получить из Telegram Web App API
+            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                userId = String(tg.initDataUnsafe.user.id || '');
+                console.log('👤 userId из Telegram Web App API:', userId);
+            }
+            // Если не получили, берем из URL
+            if (!userId) {
+                userId = urlParams.get('user_id') || '';
+                console.log('👤 userId из URL параметров:', userId);
+            }
+        } catch (e) {
+            console.warn('⚠️ Не удалось получить userId:', e);
+            userId = urlParams.get('user_id') || '';
+        }
 
         // Манифест для TON Connect
         const manifestUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/') + 'tonconnect-manifest.json';
