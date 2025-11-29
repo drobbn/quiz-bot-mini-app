@@ -87,6 +87,36 @@
             word-break: break-all;
             color: var(--tg-theme-link-color, #2481cc);
         }
+        
+        #debug-panel {
+            text-align: left;
+        }
+        
+        #debug-log {
+            line-height: 1.4;
+        }
+        
+        .debug-entry {
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        
+        .debug-entry.error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #ff6b6b;
+        }
+        
+        .debug-entry.success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+        }
+        
+        .debug-entry.warning {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+        }
     </style>
 </head>
 <body>
@@ -103,14 +133,56 @@
             <p>Адрес:</p>
             <p class="wallet-address" id="wallet-address"></p>
         </div>
+        
+        <!-- Панель отладки (видна только при необходимости) -->
+        <div id="debug-panel" style="display: none; margin-top: 20px; padding: 15px; background: #1e1e1e; color: #fff; border-radius: 10px; font-family: monospace; font-size: 11px; max-height: 200px; overflow-y: auto;">
+            <div style="margin-bottom: 10px; font-weight: bold; color: #4caf50;">🔍 Отладочная информация:</div>
+            <div id="debug-log"></div>
+        </div>
     </div>
 
     <script>
+        // Функция для визуального логирования (работает в Telegram)
+        function debugLog(message, type = 'info') {
+            const debugPanel = document.getElementById('debug-panel');
+            const debugLog = document.getElementById('debug-log');
+            
+            if (!debugPanel || !debugLog) return;
+            
+            // Показываем панель отладки
+            debugPanel.style.display = 'block';
+            
+            // Создаем запись
+            const entry = document.createElement('div');
+            entry.className = 'debug-entry ' + type;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            debugLog.appendChild(entry);
+            
+            // Прокручиваем вниз
+            debugPanel.scrollTop = debugPanel.scrollHeight;
+            
+            // Также логируем в консоль (для браузера)
+            if (type === 'error') {
+                console.error(message);
+            } else if (type === 'warning') {
+                console.warn(message);
+            } else {
+                console.log(message);
+            }
+        }
+        
         // Инициализация Telegram Web App
         const tg = window.Telegram.WebApp;
         
         // Проверяем, что мы в Telegram (не в браузере)
         const isTelegram = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
+        debugLog('🔍 Проверка окружения', 'info');
+        debugLog(`   isTelegram: ${isTelegram}`, 'info');
+        debugLog(`   tg.platform: ${tg.platform}`, 'info');
+        debugLog(`   tg.initData: ${tg.initData ? 'есть' : 'нет'}`, 'info');
+        debugLog(`   tg.initDataUnsafe: ${tg.initDataUnsafe ? 'есть' : 'нет'}`, 'info');
+        
         console.log('🔍 Проверка окружения:');
         console.log('   isTelegram:', isTelegram);
         console.log('   tg.platform:', tg.platform);
@@ -211,6 +283,9 @@
         
         // Глобальная функция для открытия deep link
         window.openDeepLink = function() {
+            debugLog('🔗 ВЫЗОВ openDeepLink', 'info');
+            debugLog(`   globalDeepLink существует: ${globalDeepLink !== null}`, 'info');
+            
             console.log('='.repeat(60));
             console.log('🔗 ВЫЗОВ openDeepLink');
             console.log('='.repeat(60));
@@ -219,12 +294,15 @@
             
             // Пробуем получить из localStorage, если глобальная переменная пуста
             if (!globalDeepLink) {
+                debugLog('⚠️ globalDeepLink пуст, пробуем получить из localStorage...', 'warning');
                 console.log('   ⚠️ globalDeepLink пуст, пробуем получить из localStorage...');
                 const storedLink = localStorage.getItem('wallet_deep_link');
                 if (storedLink) {
                     globalDeepLink = storedLink;
+                    debugLog('✅ Deep link восстановлен из localStorage', 'success');
                     console.log('   ✅ Deep link восстановлен из localStorage');
                 } else {
+                    debugLog('❌ Deep link не найден!', 'error');
                     console.error('❌ Deep link не найден ни в глобальной переменной, ни в localStorage!');
                     const statusDiv = document.getElementById('status');
                     statusDiv.className = 'status error';
@@ -232,6 +310,10 @@
                     return;
                 }
             }
+            
+            debugLog(`   Длина deep link: ${globalDeepLink.length}`, 'info');
+            debugLog(`   tg.openTelegramLink: ${typeof tg.openTelegramLink === 'function'}`, 'info');
+            debugLog(`   tg.openLink: ${typeof tg.openLink === 'function'}`, 'info');
             
             console.log('   Deep Link:', globalDeepLink);
             console.log('   Длина deep link:', globalDeepLink.length);
@@ -245,17 +327,23 @@
             try {
                 // Пробуем разные способы открытия
                 if (tg.openTelegramLink) {
+                    debugLog('✅ Используем tg.openTelegramLink', 'success');
                     console.log('   ✅ Используем tg.openTelegramLink');
                     console.log('   Вызов: tg.openTelegramLink("' + globalDeepLink.substring(0, 80) + '...")');
                     tg.openTelegramLink(globalDeepLink);
+                    debugLog('✅ tg.openTelegramLink вызван успешно', 'success');
                     console.log('   ✅ tg.openTelegramLink вызван успешно');
                 } else if (tg.openLink) {
+                    debugLog('✅ Используем tg.openLink', 'success');
                     console.log('   ✅ Используем tg.openLink');
                     tg.openLink(globalDeepLink);
+                    debugLog('✅ tg.openLink вызван успешно', 'success');
                     console.log('   ✅ tg.openLink вызван успешно');
                 } else {
+                    debugLog('⚠️ Используем window.location (fallback)', 'warning');
                     console.log('   ⚠️ Используем window.location (fallback)');
                     window.location.href = globalDeepLink;
+                    debugLog('✅ window.location.href установлен', 'success');
                     console.log('   ✅ window.location.href установлен');
                 }
                 
@@ -271,10 +359,12 @@
                         method: tg.openTelegramLink ? 'openTelegramLink' : (tg.openLink ? 'openLink' : 'window.location')
                     }));
                 } catch (e) {
+                    debugLog('⚠️ Не удалось сохранить попытку', 'warning');
                     console.warn('⚠️ Не удалось сохранить попытку:', e);
                 }
                 
             } catch (error) {
+                debugLog(`❌ Ошибка: ${error.message}`, 'error');
                 console.error('❌ Ошибка открытия deep link:', error);
                 console.error('   Тип ошибки:', error.constructor.name);
                 console.error('   Сообщение:', error.message);
@@ -293,6 +383,9 @@
 
             if (wallet) {
                 // Кошелек подключен
+                debugLog('✅ Кошелек подключен!', 'success');
+                debugLog(`   Адрес: ${wallet.account.address}`, 'info');
+                
                 statusDiv.className = 'status success';
                 statusDiv.textContent = '✅ Кошелек успешно подключен!';
                 statusDiv.style.display = 'block';
@@ -519,17 +612,23 @@
                         if (tg.MainButton) {
                             tg.MainButton.setText('✅ Завершить авторизацию');
                             tg.MainButton.onClick(() => {
+                                debugLog('🔘 Кнопка "Завершить авторизацию" нажата', 'info');
                                 console.log('🔘 Кнопка "Завершить авторизацию" нажата');
                                 if (window.openDeepLink) {
+                                    debugLog('✅ Функция openDeepLink найдена, вызываем...', 'success');
                                     window.openDeepLink();
                                 } else {
+                                    debugLog('❌ Функция openDeepLink не найдена!', 'error');
                                     console.error('❌ Функция openDeepLink не найдена!');
                                     statusDiv.className = 'status error';
                                     statusDiv.innerHTML = '❌ <b>Ошибка:</b> функция не найдена. Попробуйте обновить страницу.';
                                 }
                             });
                             tg.MainButton.show();
+                            debugLog('✅ Кнопка показана пользователю', 'success');
                             console.log('✅ Кнопка показана пользователю и привязана к функции openDeepLink');
+                        } else {
+                            debugLog('⚠️ tg.MainButton недоступен', 'warning');
                         }
                         
                         // Также добавляем обычную HTML кнопку как fallback
