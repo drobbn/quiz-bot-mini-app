@@ -598,18 +598,18 @@
                             return;
                         }
                         
-                        // ВАЖНО: Для deep link используем ТОЛЬКО адрес кошелька
+                        // ВАЖНО: Используем упрощенный формат - просто адрес кошелька в параметре
                         // Это гарантирует, что параметр не будет обрезан Telegram
-                        // Остальные данные (chain, publicKey, walletName) можно получить из БД или API
-                        const shortData = btoa(JSON.stringify({
-                            type: 'wallet_connected',
-                            address: wallet.account.address
-                        })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                        // Бот обработает это как команду /connect_wallet
+                        const walletAddress = wallet.account.address;
+                        // Кодируем адрес в base64 для безопасной передачи через URL
+                        const encodedAddress = btoa(walletAddress).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
                         
-                        const deepLink = `https://t.me/${botUsername}?start=wallet_${shortData}`;
+                        // Используем формат /start connect_<encoded_address> - бот обработает это как /connect_wallet
+                        const deepLink = `https://t.me/${botUsername}?start=connect_${encodedAddress}`;
                         
                         debugLog('🔗 Deep link создан (упрощенный формат)', 'info');
-                        debugLog(`   Используется только адрес кошелька`, 'info');
+                        debugLog(`   Используется только адрес кошелька (формат connect_)`, 'info');
                         debugLog(`   Длина deep link: ${deepLink.length} символов`, 'info');
                         
                         // Сохраняем в глобальную переменную для использования кнопкой
