@@ -642,51 +642,113 @@
                         localStorage.setItem('wallet_data', jsonString);
                         localStorage.setItem('bot_username', botUsername);
                         
-                        // ВАЖНО: Показываем кнопку для завершения авторизации
-                        // Deep link может не работать, поэтому даем пользователю возможность отправить команду вручную
-                        debugLog('🔗 Создание кнопки для завершения авторизации...', 'info');
+                        // ВАЖНО: Отправляем данные напрямую на HTTP API сервер бота
+                        // Это обходит проблемы с tg.sendData и deep links
+                        debugLog('🌐 Отправка данных на HTTP API сервер...', 'info');
                         statusDiv.className = 'status success';
-                        statusDiv.innerHTML = (
-                            '✅ <b>Кошелек подключен!</b><br><br>' +
-                            'Нажмите кнопку ниже, чтобы завершить авторизацию:<br><br>' +
-                            `<button onclick="window.sendConnectCommand()" style="padding: 12px 24px; background: #0088cc; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%;">` +
-                            '✅ Завершить авторизацию' +
-                            '</button><br><br>' +
-                            '<small>Или отправьте в бота команду:</small><br>' +
-                            `<code style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;">/connect_wallet ${walletAddr}</code>`
-                        );
+                        statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Завершаю авторизацию...<br><br><small>Отправка данных на сервер...</small>';
                         statusDiv.style.display = 'block';
                         
-                        // Создаем функцию для отправки команды через deep link
-                        window.sendConnectCommand = function() {
-                            debugLog('🔗 Отправка команды в бота через deep link...', 'info');
-                            // Пробуем открыть deep link
-                            try {
-                                if (window.openDeepLink) {
-                                    window.openDeepLink();
-                                } else if (tg.openTelegramLink) {
-                                    tg.openTelegramLink(deepLink);
-                                } else if (tg.openLink) {
-                                    tg.openLink(deepLink);
-                                } else {
-                                    // Fallback: показываем адрес для ручного ввода
-                                    alert(`Отправьте в бота команду:\n/connect_wallet ${walletAddr}`);
-                                }
-                                debugLog('✅ Команда отправлена', 'success');
-                            } catch (e) {
-                                debugLog(`❌ Ошибка отправки команды: ${e.message}`, 'error');
-                                // Показываем адрес для ручного ввода
-                                alert(`Отправьте в бота команду:\n/connect_wallet ${walletAddr}`);
-                            }
+                        // Получаем initData для проверки подписи
+                        const initData = tg.initData || '';
+                        if (!initData) {
+                            debugLog('❌ initData недоступен!', 'error');
+                            statusDiv.className = 'status error';
+                            statusDiv.innerHTML = (
+                                '❌ <b>Ошибка:</b> не удалось получить данные авторизации.<br><br>' +
+                                'Попробуйте перезагрузить страницу или отправьте в бота команду:<br>' +
+                                `<code>/connect_wallet ${walletAddr}</code>`
+                            );
+                            return;
+                        }
+                        
+                        // URL API сервера (используем IP сервера)
+                        const apiUrl = `http://195.133.197.135:8000/api/connect_wallet`;
+                        
+                        // Данные для отправки
+                        const apiData = {
+                            wallet_address: walletAddr,
+                            init_data: initData,
+                            wallet_name: walletName || 'tonkeeper',
+                            chain: wallet.account.chain || '-239'
                         };
                         
-                        // Также пробуем автоматически открыть deep link
-                        setTimeout(() => {
-                            debugLog('🔗 Автоматическая отправка deep link...', 'info');
-                            if (window.sendConnectCommand) {
-                                window.sendConnectCommand();
+                        debugLog(`📤 Отправка POST на ${apiUrl}...`, 'info');
+                        debugLog(`   Wallet: ${walletAddr}`, 'info');
+                        debugLog(`   InitData length: ${initData.length}`, 'info');
+                        
+                        // Отправляем POST запрос
+                        fetch(apiUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(apiData)
+                        })
+                        .then(response => {
+                            debugLog(`📥 Ответ получен: ${response.status}`, 'info');
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success) {
+                                debugLog('✅ Кошелек успешно сохранен в БД!', 'success');
+                                statusDiv.className = 'status success';
+                                statusDiv.innerHTML = (
+                                    '✅ <b>Авторизация успешна!</b><br><br>' +
+                                    '💼 <b>Ваш кошелек подключен:</b><br>' +
+                                    `<code>${walletAddr}</code><br><br>` +
+                                    '🎯 Теперь вы можете:<br>' +
+                                    '• Участвовать в викторинах<br>' +
+                                    '• Получать награды<br>' +
+                                    '• Проверять баланс<br><br>' +
+                                    '<small>Можете закрыть это окно.</small>'
+                                );
+                                
+                                // Показываем уведомление через 2 секунды
+                                setTimeout(() => {
+                                    if (tg.showAlert) {
+                                        tg.showAlert('✅ Кошелек успешно подключен!');
+                                    }
+                                }, 2000);
+                            } else {
+                                throw new Error(data.error || 'Unknown error');
                             }
-                        }, 1000);
+                        })
+                        .catch(error => {
+                            debugLog(`❌ Ошибка отправки на API: ${error.message}`, 'error');
+                            console.error('Ошибка API:', error);
+                            
+                            // Fallback: показываем команду для ручного ввода
+                            statusDiv.className = 'status warning';
+                            statusDiv.innerHTML = (
+                                '⚠️ <b>Автоматическая отправка не удалась</b><br><br>' +
+                                'Отправьте в бота команду:<br><br>' +
+                                `<code style="background: #f0f0f0; padding: 8px; border-radius: 4px; display: block; word-break: break-all;">/connect_wallet ${walletAddr}</code><br><br>` +
+                                '<button onclick="copyAddress()" style="margin-top: 10px; padding: 8px 16px; background: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer;">📋 Копировать команду</button>'
+                            );
+                            
+                            // Обновляем функцию копирования
+                            window.copyAddress = function() {
+                                const command = `/connect_wallet ${walletAddr}`;
+                                if (navigator.clipboard) {
+                                    navigator.clipboard.writeText(command).then(() => {
+                                        if (tg.showAlert) {
+                                            tg.showAlert('✅ Команда скопирована! Отправьте её в бота.');
+                                        }
+                                    });
+                                } else {
+                                    const textarea = document.createElement('textarea');
+                                    textarea.value = command;
+                                    document.body.appendChild(textarea);
+                                    textarea.select();
+                                    document.execCommand('copy');
+                                    document.body.removeChild(textarea);
+                                    if (tg.showAlert) {
+                                        tg.showAlert('✅ Команда скопирована! Отправьте её в бота.');
+                                    }
+                                }
+                            };
+                        });
                         
                         // Кнопки убраны - deep link открывается автоматически
                         // Если автоматическое открытие не сработало, пользователь может использовать команду /connect_wallet
