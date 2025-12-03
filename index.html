@@ -662,8 +662,8 @@
                             return;
                         }
                         
-                        // URL API сервера (используем IP сервера)
-                        const apiUrl = `http://195.133.197.135:8000/api/connect_wallet`;
+                        // URL API сервера (используем HTTPS через nginx)
+                        const apiUrl = `https://195.133.197.135/api/connect_wallet`;
                         
                         // Данные для отправки
                         const apiData = {
