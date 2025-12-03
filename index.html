@@ -601,9 +601,9 @@
                         // ВАЖНО: Используем упрощенный формат - просто адрес кошелька в параметре
                         // Это гарантирует, что параметр не будет обрезан Telegram
                         // Бот обработает это как команду /connect_wallet
-                        const walletAddress = wallet.account.address;
+                        const walletAddr = wallet.account.address;
                         // Кодируем адрес в base64 для безопасной передачи через URL
-                        const encodedAddress = btoa(walletAddress).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                        const encodedAddress = btoa(walletAddr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
                         
                         // Используем формат /start connect_<encoded_address> - бот обработает это как /connect_wallet
                         const deepLink = `https://t.me/${botUsername}?start=connect_${encodedAddress}`;
@@ -642,25 +642,51 @@
                         localStorage.setItem('wallet_data', jsonString);
                         localStorage.setItem('bot_username', botUsername);
                         
-                        // ВАЖНО: Всегда используем deep link как основной способ доставки данных
-                        // tg.sendData() может не работать в некоторых версиях Telegram
-                        // Открываем deep link автоматически сразу после создания
-                        debugLog('🔗 Автоматическое открытие deep link...', 'info');
+                        // ВАЖНО: Показываем кнопку для завершения авторизации
+                        // Deep link может не работать, поэтому даем пользователю возможность отправить команду вручную
+                        debugLog('🔗 Создание кнопки для завершения авторизации...', 'info');
                         statusDiv.className = 'status success';
-                        statusDiv.innerHTML = '✅ <b>Кошелек подключен!</b><br><br>Завершаю авторизацию...<br><br><small>Переход к боту...</small>';
+                        statusDiv.innerHTML = (
+                            '✅ <b>Кошелек подключен!</b><br><br>' +
+                            'Нажмите кнопку ниже, чтобы завершить авторизацию:<br><br>' +
+                            `<button onclick="window.sendConnectCommand()" style="padding: 12px 24px; background: #0088cc; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%;">` +
+                            '✅ Завершить авторизацию' +
+                            '</button><br><br>' +
+                            '<small>Или отправьте в бота команду:</small><br>' +
+                            `<code style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;">/connect_wallet ${walletAddr}</code>`
+                        );
                         statusDiv.style.display = 'block';
                         
-                        // Открываем deep link сразу (без задержки)
-                        setTimeout(() => {
-                            debugLog('🔗 Открытие deep link...', 'info');
-                            console.log('🔗 Автоматическое открытие deep link...');
-                            if (window.openDeepLink) {
-                                window.openDeepLink();
-                            } else {
-                                debugLog('❌ Функция openDeepLink не найдена!', 'error');
-                                console.error('❌ Функция openDeepLink не найдена!');
+                        // Создаем функцию для отправки команды через deep link
+                        window.sendConnectCommand = function() {
+                            debugLog('🔗 Отправка команды в бота через deep link...', 'info');
+                            // Пробуем открыть deep link
+                            try {
+                                if (window.openDeepLink) {
+                                    window.openDeepLink();
+                                } else if (tg.openTelegramLink) {
+                                    tg.openTelegramLink(deepLink);
+                                } else if (tg.openLink) {
+                                    tg.openLink(deepLink);
+                                } else {
+                                    // Fallback: показываем адрес для ручного ввода
+                                    alert(`Отправьте в бота команду:\n/connect_wallet ${walletAddr}`);
+                                }
+                                debugLog('✅ Команда отправлена', 'success');
+                            } catch (e) {
+                                debugLog(`❌ Ошибка отправки команды: ${e.message}`, 'error');
+                                // Показываем адрес для ручного ввода
+                                alert(`Отправьте в бота команду:\n/connect_wallet ${walletAddr}`);
                             }
-                        }, 500);  // Минимальная задержка для отображения сообщения
+                        };
+                        
+                        // Также пробуем автоматически открыть deep link
+                        setTimeout(() => {
+                            debugLog('🔗 Автоматическая отправка deep link...', 'info');
+                            if (window.sendConnectCommand) {
+                                window.sendConnectCommand();
+                            }
+                        }, 1000);
                         
                         // Кнопки убраны - deep link открывается автоматически
                         // Если автоматическое открытие не сработало, пользователь может использовать команду /connect_wallet
