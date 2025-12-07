@@ -48,6 +48,30 @@
 
         #tonconnect-button {
             margin: 20px 0;
+            min-height: 50px; /* Минимальная высота, чтобы видеть, что элемент существует */
+        }
+        
+        /* Fallback кнопка, если TON Connect UI не загрузился */
+        .fallback-connect-button {
+            display: none; /* По умолчанию скрыта */
+            width: 100%;
+            padding: 15px 20px;
+            background: #0088cc;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 20px 0;
+        }
+        
+        .fallback-connect-button:hover {
+            background: #0077b3;
+        }
+        
+        .fallback-connect-button:active {
+            background: #006699;
         }
 
         .status {
@@ -125,6 +149,24 @@
         <p class="subtitle">Для участия в викторинах и получения наград</p>
         
         <div id="tonconnect-button"></div>
+        
+        <!-- Fallback кнопка, если TON Connect UI не загрузился -->
+        <button id="fallback-connect-button" class="fallback-connect-button" onclick="showFallbackError()">
+            🔗 Подключить кошелек
+        </button>
+        
+        <script>
+            // Функция для fallback кнопки
+            function showFallbackError() {
+                const statusDiv = document.getElementById('status');
+                statusDiv.textContent = '❌ TON Connect UI не загружен. Проверь подключение к интернету и обнови страницу.';
+                statusDiv.className = 'status error';
+                statusDiv.style.display = 'block';
+                if (typeof debugLog !== 'undefined') {
+                    debugLog('⚠️ Нажата fallback кнопка - TON Connect UI не работает', 'error');
+                }
+            }
+        </script>
         
         <div id="status" class="status"></div>
         
@@ -248,34 +290,91 @@
 
         // Манифест для TON Connect
         const manifestUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/') + 'tonconnect-manifest.json';
+        
+        debugLog(`📋 Манифест URL: ${manifestUrl}`, 'info');
+        console.log('📋 Манифест URL:', manifestUrl);
+
+        // Проверяем, что TON Connect UI загружен
+        if (typeof TON_CONNECT_UI === 'undefined') {
+            const errorMsg = '❌ TON Connect UI не загружен! Проверь подключение к интернету.';
+            debugLog(errorMsg, 'error');
+            console.error(errorMsg);
+            document.getElementById('status').textContent = errorMsg;
+            document.getElementById('status').className = 'status error';
+            document.getElementById('status').style.display = 'block';
+        } else {
+            debugLog('✅ TON Connect UI загружен', 'info');
+            console.log('✅ TON Connect UI загружен');
+        }
 
         // Инициализация TON Connect UI
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: manifestUrl,
-            buttonRootId: 'tonconnect-button',
-            language: 'ru',
-            uiPreferences: {
-                theme: tg.colorScheme === 'dark' ? 'DARK' : 'LIGHT'
-            },
-            // ВАЖНО: Убираем twaReturnUrl, чтобы предотвратить автоматическое закрытие
-            // actionsConfiguration: {
-            //     twaReturnUrl: `https://t.me/${botUsername}`
-            // }
-        });
+        let tonConnectUI;
+        try {
+            // Создаем глобальную переменную для доступа из других функций
+            window.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: manifestUrl,
+                buttonRootId: 'tonconnect-button',
+                language: 'ru',
+                uiPreferences: {
+                    theme: tg.colorScheme === 'dark' ? 'DARK' : 'LIGHT'
+                },
+                // ВАЖНО: Убираем twaReturnUrl, чтобы предотвратить автоматическое закрытие
+                // actionsConfiguration: {
+                //     twaReturnUrl: `https://t.me/${botUsername}`
+                // }
+            });
+            tonConnectUI = window.tonConnectUI; // Для локального использования
+            debugLog('✅ TON Connect UI инициализирован', 'info');
+            console.log('✅ TON Connect UI инициализирован');
+            
+            // Проверяем, что кнопка создана
+            setTimeout(() => {
+                const buttonElement = document.getElementById('tonconnect-button');
+                const fallbackButton = document.getElementById('fallback-connect-button');
+                
+                if (buttonElement && buttonElement.children.length > 0) {
+                    debugLog('✅ Кнопка TON Connect отображается', 'success');
+                    console.log('✅ Кнопка TON Connect отображается');
+                    // Скрываем fallback кнопку, если основная работает
+                    if (fallbackButton) {
+                        fallbackButton.style.display = 'none';
+                    }
+                } else {
+                    debugLog('⚠️ Кнопка TON Connect не найдена в DOM', 'warning');
+                    console.warn('⚠️ Кнопка TON Connect не найдена в DOM');
+                    console.log('   Элемент tonconnect-button:', buttonElement);
+                    
+                    // Показываем fallback кнопку
+                    if (fallbackButton) {
+                        fallbackButton.style.display = 'block';
+                        debugLog('⚠️ Показана fallback кнопка подключения', 'warning');
+                    }
+                }
+            }, 2000); // Увеличил время ожидания до 2 секунд
+        } catch (error) {
+            const errorMsg = `❌ Ошибка инициализации TON Connect UI: ${error.message}`;
+            debugLog(errorMsg, 'error');
+            console.error(errorMsg, error);
+            document.getElementById('status').textContent = errorMsg;
+            document.getElementById('status').className = 'status error';
+            document.getElementById('status').style.display = 'block';
+        }
 
         // Проверяем, подключен ли уже кошелек при загрузке
-        tonConnectUI.connectionRestored.then((wallet) => {
-            if (wallet) {
-                console.log('🔍 Кошелек уже подключен при загрузке:', wallet.account.address);
-                // НЕ закрываем Mini App автоматически - пользователь может отвязать кошелек
-                const walletInfoDiv = document.getElementById('wallet-info');
-                const walletAddressDiv = document.getElementById('wallet-address');
-                walletInfoDiv.style.display = 'block';
-                walletAddressDiv.textContent = wallet.account.address;
-            }
-        }).catch(() => {
-            console.log('ℹ️ Кошелек не подключен при загрузке');
-        });
+        if (tonConnectUI) {
+            tonConnectUI.connectionRestored.then((wallet) => {
+                if (wallet) {
+                    console.log('🔍 Кошелек уже подключен при загрузке:', wallet.account.address);
+                    // НЕ закрываем Mini App автоматически - пользователь может отвязать кошелек
+                    const walletInfoDiv = document.getElementById('wallet-info');
+                    const walletAddressDiv = document.getElementById('wallet-address');
+                    walletInfoDiv.style.display = 'block';
+                    walletAddressDiv.textContent = wallet.account.address;
+                }
+            }).catch(() => {
+                console.log('ℹ️ Кошелек не подключен при загрузке');
+            });
+        }
 
         // Глобальная переменная для deep link (чтобы кнопка могла её использовать)
         let globalDeepLink = null;
@@ -684,9 +783,8 @@
                             headers: {
                                 'Content-Type': 'application/json',
                             },
-                            body: JSON.stringify(apiData)
+                            body: JSON.stringify(apiData),
                             // Используем Cloudflare Tunnel с валидным SSL сертификатом
-                            // В production это должно быть через валидный сертификат
                             mode: 'cors',
                             credentials: 'omit'
                         })
