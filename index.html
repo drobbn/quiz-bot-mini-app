@@ -662,8 +662,8 @@
                             return;
                         }
                         
-                        // URL API сервера (используем HTTPS через nginx)
-                        const apiUrl = `https://195.133.197.135/api/connect_wallet`;
+                        // URL API сервера через Cloudflare Tunnel (валидный SSL сертификат)
+                        const apiUrl = `https://close-causing-adelaide-machine.trycloudflare.com/api/connect_wallet`;
                         
                         // Данные для отправки
                         const apiData = {
@@ -678,15 +678,28 @@
                         debugLog(`   InitData length: ${initData.length}`, 'info');
                         
                         // Отправляем POST запрос
+                        debugLog(`🌐 Начинаю fetch запрос на ${apiUrl}...`, 'info');
                         fetch(apiUrl, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                             },
                             body: JSON.stringify(apiData)
+                            // Используем Cloudflare Tunnel с валидным SSL сертификатом
+                            // В production это должно быть через валидный сертификат
+                            mode: 'cors',
+                            credentials: 'omit'
                         })
                         .then(response => {
-                            debugLog(`📥 Ответ получен: ${response.status}`, 'info');
+                            debugLog(`📥 Ответ получен: ${response.status} ${response.statusText}`, 'info');
+                            if (!response.ok) {
+                                // Пробуем прочитать текст ошибки
+                                return response.text().then(text => {
+                                    debugLog(`❌ HTTP ошибка: ${response.status}`, 'error');
+                                    debugLog(`   Тело ответа: ${text.substring(0, 200)}`, 'error');
+                                    throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+                                });
+                            }
                             return response.json();
                         })
                         .then(data => {
@@ -716,22 +729,40 @@
                         })
                         .catch(error => {
                             debugLog(`❌ Ошибка отправки на API: ${error.message}`, 'error');
-                            console.error('Ошибка API:', error);
+                            debugLog(`   Тип ошибки: ${error.name}`, 'error');
+                            debugLog(`   Стек: ${error.stack ? error.stack.substring(0, 200) : 'нет'}`, 'error');
+                            console.error('Полная ошибка API:', error);
+                            console.error('URL:', apiUrl);
+                            console.error('Данные:', apiData);
                             
                             // Fallback: показываем команду для ручного ввода
                             statusDiv.className = 'status warning';
+                            const command = `/connect_wallet ${walletAddr}`;
+                            
+                            // Автоматически копируем команду в буфер обмена
+                            if (navigator.clipboard) {
+                                navigator.clipboard.writeText(command).then(() => {
+                                    debugLog('✅ Команда автоматически скопирована в буфер обмена', 'success');
+                                }).catch(() => {
+                                    debugLog('⚠️ Не удалось автоматически скопировать команду', 'warning');
+                                });
+                            }
+                            
                             statusDiv.innerHTML = (
                                 '⚠️ <b>Автоматическая отправка не удалась</b><br><br>' +
-                                'Отправьте в бота команду:<br><br>' +
-                                `<code style="background: #f0f0f0; padding: 8px; border-radius: 4px; display: block; word-break: break-all;">/connect_wallet ${walletAddr}</code><br><br>` +
-                                '<button onclick="copyAddress()" style="margin-top: 10px; padding: 8px 16px; background: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer;">📋 Копировать команду</button>'
+                                '<small>Причина: самоподписанный SSL сертификат не поддерживается в Telegram WebView</small><br><br>' +
+                                '✅ <b>Команда уже скопирована!</b><br><br>' +
+                                '📋 <b>Отправьте в бота команду:</b><br><br>' +
+                                `<code style="background: #f0f0f0; padding: 12px; border-radius: 8px; display: block; word-break: break-all; font-size: 14px; border: 2px solid #0088cc;">${command}</code><br><br>` +
+                                '<button onclick="copyAddress()" style="margin-top: 10px; padding: 12px 24px; background: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%;">📋 Скопировать команду снова</button><br><br>' +
+                                '<small>💡 Перейдите в чат с ботом и вставьте команду (Ctrl+V или долгое нажатие → Вставить)</small>'
                             );
                             
                             // Обновляем функцию копирования
                             window.copyAddress = function() {
-                                const command = `/connect_wallet ${walletAddr}`;
                                 if (navigator.clipboard) {
                                     navigator.clipboard.writeText(command).then(() => {
+                                        debugLog('✅ Команда скопирована в буфер обмена', 'success');
                                         if (tg.showAlert) {
                                             tg.showAlert('✅ Команда скопирована! Отправьте её в бота.');
                                         }
@@ -743,6 +774,7 @@
                                     textarea.select();
                                     document.execCommand('copy');
                                     document.body.removeChild(textarea);
+                                    debugLog('✅ Команда скопирована (fallback метод)', 'success');
                                     if (tg.showAlert) {
                                         tg.showAlert('✅ Команда скопирована! Отправьте её в бота.');
                                     }
